@@ -36,7 +36,7 @@ docker compose -f docker-compose.dev.yml up --build   # full local stack (make s
 go run .                           # run against services in app.env
 go build ./...                     # compile check
 go vet ./...
-go test ./tests/... -p 1 -timeout 600s   # -p 1 avoids GORM auto-migrate deadlocks
+go test ./... -p 1 -timeout 600s   # -p 1 avoids GORM auto-migrate deadlocks
 gofmt -l . && goimports -l .       # formatting check
 ```
 
