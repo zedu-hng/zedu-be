@@ -103,7 +103,7 @@ failures. Do not report success on a red build.
 ## PR and commit instructions for agents
 
 - Keep diffs minimal and focused on the ticket; do not drive-by refactor.
-- Run the build and tests above before proposing a change; report the exact commands you ran.
+- Run the build and tests above before reporting completion; report the exact commands you ran.
 - Do not touch protected files silently — call it out and wait for confirmation.
 - Reference code as `path/to/file.go:line` so reviewers can navigate.
 - Do not commit or push unless the user explicitly asks.
