@@ -35,6 +35,12 @@ work is proposed, reviewed and merged. For the detailed Go engineering standards
 - Go 1.24 or newer.
 - Docker and Docker Compose (recommended for the full local stack).
 - Access to the repository and a GitHub account added to the org.
+- The `migrate` CLI on your `PATH`, used by the `make migrate-*` targets:
+
+  ```sh
+  go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@v4.18.1
+  export PATH="$(go env GOPATH)/bin:$PATH"
+  ```
 
 Set up your environment:
 
