@@ -390,7 +390,11 @@ func addUserToChannel(chans *models.Channels, orgmgt models.OrgUserManagement, l
 		return err
 	}
 
-	newUser := models.UserMention{UserID: orgmgt.UserID, Username: profile.UserName}
+	newUser, mentionErr := models.NewChannelJoinMention(gormDB, orgmgt.UserID, orgmgt.OrganisationID)
+	if mentionErr != nil || newUser.Username == "" {
+		logger.Error("failed to resolve join notice label, skipping join system message", "user_id", orgmgt.UserID, "channel_id", chans.ID, "error", mentionErr)
+		return nil
+	}
 	if storageDB != nil {
 		_ = thread.SaveOrMergeJoinSystemMessage(storageDB, logger, chans.ID, chans.Name, chans.OrganisationID, []models.UserMention{newUser}, nil)
 	}

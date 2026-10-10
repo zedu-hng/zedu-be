@@ -169,8 +169,12 @@ func JoinChannels(db *storage.Database, req models.JoinChannelsRequest, logger *
 	}
 
 	if channel.ShowJoinedMessage {
-		newUser := models.UserMention{UserID: req.UserID, Username: req.Username}
-		_ = thread.SaveOrMergeJoinSystemMessage(db, logger, channel.ID, channel.Name, channel.OrganisationID, []models.UserMention{newUser}, nil)
+		newUser, mentionErr := models.NewChannelJoinMention(db.Postgresql, req.UserID, channel.OrganisationID)
+		if mentionErr != nil || newUser.Username == "" {
+			logger.Error("failed to resolve join notice label, skipping join system message", "user_id", req.UserID, "channel_id", channel.ID, "error", mentionErr)
+		} else {
+			_ = thread.SaveOrMergeJoinSystemMessage(db, logger, channel.ID, channel.Name, channel.OrganisationID, []models.UserMention{newUser}, nil)
+		}
 	}
 
 	triggerNotif := models.Notification[models.TriggerNotification]
@@ -356,8 +360,12 @@ func AddMembersToChannel(db *storage.Database, req models.JoinChannelsRequest, l
 		return channel, err
 	}
 
-	newUser := models.UserMention{UserID: req.UserID, Username: req.Username}
-	_ = thread.SaveOrMergeJoinSystemMessage(db, logger, channel.ID, channel.Name, channel.OrganisationID, []models.UserMention{newUser}, nil)
+	newUser, mentionErr := models.NewChannelJoinMention(db.Postgresql, req.UserID, channel.OrganisationID)
+	if mentionErr != nil || newUser.Username == "" {
+		logger.Error("failed to resolve join notice label, skipping join system message", "user_id", req.UserID, "channel_id", channel.ID, "error", mentionErr)
+	} else {
+		_ = thread.SaveOrMergeJoinSystemMessage(db, logger, channel.ID, channel.Name, channel.OrganisationID, []models.UserMention{newUser}, nil)
+	}
 
 	triggerNotif := models.Notification[models.TriggerNotification]
 	triggerNotif.SectionType = models.ChannelsSection
@@ -377,30 +385,14 @@ func AddMembersToChannel(db *storage.Database, req models.JoinChannelsRequest, l
 }
 
 func AddMultipleMembersToChannel(db *storage.Database, req models.AddMultipleMembersRequest, logger *utility.Logger) error {
-	var (
-		ch   models.Channels
-		user models.User
-	)
+	var ch models.Channels
 
 	validUserIds, err := ch.AddMultipleUsersToChannel(db.Postgresql, req)
 	if err != nil {
 		return err
 	}
 
-	var newUsers []models.UserMention
-	for _, userId := range validUserIds {
-		userDetails, err := user.GetUserByID(db.Postgresql, userId, ch.OrganisationID)
-		if err != nil {
-			logger.Error("Failed to get user %s username", userId)
-			continue
-		}
-
-		uName := userDetails.Profile.UserName
-		if uName == "" {
-			uName = utility.SplitEmailString(userDetails.Email)
-		}
-		newUsers = append(newUsers, models.UserMention{UserID: userId, Username: uName})
-	}
+	newUsers := models.BuildChannelJoinMentions(db.Postgresql, validUserIds, ch.OrganisationID)
 
 	if len(newUsers) > 0 && ch.ShowJoinedMessage {
 		_ = thread.SaveOrMergeJoinSystemMessage(db, logger, ch.ID, ch.Name, ch.OrganisationID, newUsers, nil)

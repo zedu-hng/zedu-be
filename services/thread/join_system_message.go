@@ -145,32 +145,27 @@ func extractUsersFromSource(db *storage.Database, source map[string]any, orgID s
 	seen := make(map[string]bool)
 
 	if mentionsArray, ok := source["mentions"].([]any); ok {
+		ids := make([]string, 0, len(mentionsArray))
 		for _, m := range mentionsArray {
 			if mMap, ok := m.(map[string]any); ok {
 				uID := utility.GetString(mMap, "id")
 				mType := utility.GetString(mMap, "type")
 				if uID != "" && mType == "user" && !seen[uID] {
 					seen[uID] = true
-					var u models.User
-					uDetails, err := u.GetUserByID(db.Postgresql, uID, orgID)
-					uName := uID
-					if err == nil {
-						uName = uDetails.Profile.UserName
-						if uName == "" {
-							uName = utility.SplitEmailString(uDetails.Email)
-						}
-					}
-					users = append(users, models.UserMention{UserID: uID, Username: uName})
+					ids = append(ids, uID)
 				}
 			}
 		}
+		// Re-resolve every stored participant ID against the server-side
+		// profile so merged notices always show current display names.
+		// Unresolvable IDs are dropped; legacy stored labels and raw IDs
+		// are never reused as authoritative labels.
+		users = append(users, models.BuildChannelJoinMentions(db.Postgresql, ids, orgID)...)
 	}
 
 	if len(users) == 0 {
-		uID := utility.GetString(source, "user_id")
-		uName := utility.GetString(source, "username")
-		if uID != "" {
-			users = append(users, models.UserMention{UserID: uID, Username: uName})
+		if uID := utility.GetString(source, "user_id"); uID != "" {
+			users = append(users, models.BuildChannelJoinMentions(db.Postgresql, []string{uID}, orgID)...)
 		}
 	}
 

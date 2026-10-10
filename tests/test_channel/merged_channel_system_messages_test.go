@@ -1,6 +1,7 @@
 package test_channel
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/hngprojects/telex_be/internal/models"
@@ -85,6 +86,26 @@ func TestMergedChannelJoinAndLeaveMessages(t *testing.T) {
 		expected := `<p><span class="mention" data-type="mention" data-id="u1" data-label="elizabeth" data-mention-suggestion-char="@">@elizabeth</span> left this channel. <span class="mention" data-type="mention" data-id="u2" data-label="Godwin" data-mention-suggestion-char="@">@Godwin</span> and 2 others also left.</p><p></p>`
 		if got != expected {
 			t.Errorf("got %q, want %q", got, expected)
+		}
+	})
+}
+
+func TestMergedJoinNoticePreservesResolvedDisplayNames(t *testing.T) {
+	users := []models.UserMention{
+		{UserID: "u1", Username: "Lynn B"},
+		{UserID: "u2", Username: "Godwin"},
+	}
+
+	t.Run("merged notice keeps each participant display name and id", func(t *testing.T) {
+		got := models.FormatMergedChannelJoinMessage(users, nil, "general")
+		if !strings.Contains(got, `data-id="u1"`) || !strings.Contains(got, "@Lynn B") {
+			t.Errorf("expected first participant display name and id preserved, got %q", got)
+		}
+		if !strings.Contains(got, `data-id="u2"`) || !strings.Contains(got, "@Godwin") {
+			t.Errorf("expected second participant display name and id preserved, got %q", got)
+		}
+		if strings.Contains(got, "Pauline Banye") {
+			t.Errorf("expected no full name in merged notice, got %q", got)
 		}
 	})
 }
