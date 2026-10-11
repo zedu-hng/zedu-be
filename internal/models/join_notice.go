@@ -5,6 +5,8 @@ import (
 	"strings"
 
 	"gorm.io/gorm"
+
+	"github.com/hngprojects/telex_be/utility"
 )
 
 // NoticeLabelForProfile resolves the display label for a channel join/leave
@@ -18,46 +20,43 @@ func NoticeLabelForProfile(profile Profile) string {
 	return strings.TrimSpace(profile.UserName)
 }
 
-// LoadJoinNoticeProfile fetches a user's channel-visible profile with a
-// strictly read-only resolution: org-scoped profile first, then the
-// unscoped base profile. Unlike GetOrCreateProfileForOrg, it never binds,
-// creates, or caches profiles — a join notice must not mutate membership data.
-// A genuine database failure on the org-scoped query is propagated
-// immediately; only a record-not-found falls through to the base profile.
-func LoadJoinNoticeProfile(db *gorm.DB, userID, orgID string) (Profile, error) {
-	var profile Profile
-	if orgID != "" {
-		if err := db.Where("userid = ? AND organisation_id = ?", userID, orgID).First(&profile).Error; err != nil {
-			if !errors.Is(err, gorm.ErrRecordNotFound) {
-				return Profile{}, err
-			}
-		} else {
-			return profile, nil
-		}
+// noticeLabelForUserName resolves the final trusted account-level fallback
+// labels from an already-loaded user row. It never touches the database and
+// never uses client-supplied request data.
+func noticeLabelForUserName(user User) string {
+	if label := strings.TrimSpace(user.Name); label != "" {
+		return label
 	}
-	if err := db.Where("userid = ? AND organisation_id IS NULL", userID).Order("created_at asc").First(&profile).Error; err != nil {
-		return Profile{}, err
-	}
-	return profile, nil
+	return strings.TrimSpace(utility.SplitEmailString(user.Email))
 }
 
-// ErrJoinNoticeNoLabel is returned when a stored profile exists but carries
-// no usable server-side label (both display_name and user_name are empty).
-// Callers must skip the participant rather than publish a blank mention.
+// ErrJoinNoticeNoLabel is returned only when a user record exists but
+// carries no usable trusted label at all (blank profile names, blank
+// account name, and blank email prefix). Callers skip the participant
+// rather than publish a blank mention.
 var ErrJoinNoticeNoLabel = errors.New("join notice: no server-side label available")
 
 // NewChannelJoinMention builds the system-notice participant for a single
-// channel joiner, resolving the label server-side from the stored profile.
-// Precedence: stored display_name, then stored user_name; otherwise no
-// notice is generated for that participant (ErrJoinNoticeNoLabel). The
-// mention UserID is always preserved. No client-controlled string is ever
-// used as a label.
+// channel joiner, resolving the label server-side from trusted backend data.
+// Precedence: organization-specific display_name, then profile user_name,
+// then the trusted account username, then the email-prefix fallback.
+// The mention UserID is always preserved. No client-controlled string is
+// ever used as a label.
+//
+// GetUserByID returns the user row even when optional profile resolution
+// fails, so a missing profile never suppresses an otherwise valid notice:
+// the account-level fallback still applies. Only a missing user record
+// (or a completely blank identity) prevents notice generation.
 func NewChannelJoinMention(db *gorm.DB, userID, orgID string) (UserMention, error) {
-	profile, err := LoadJoinNoticeProfile(db, userID, orgID)
+	var user User
+	details, err := user.GetUserByID(db, userID, orgID)
 	if err != nil {
 		return UserMention{UserID: userID}, err
 	}
-	if label := NoticeLabelForProfile(profile); label != "" {
+	if label := NoticeLabelForProfile(details.Profile); label != "" {
+		return UserMention{UserID: userID, Username: label}, nil
+	}
+	if label := noticeLabelForUserName(details); label != "" {
 		return UserMention{UserID: userID, Username: label}, nil
 	}
 	return UserMention{UserID: userID}, ErrJoinNoticeNoLabel
