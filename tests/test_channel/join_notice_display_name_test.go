@@ -247,3 +247,67 @@ func TestChannelJoinNoticeMentionReferencesUserID(t *testing.T) {
 		t.Errorf("expected join notice mention to reference user id %q, got %q", joinerID, content)
 	}
 }
+
+func TestChannelJoinNoticeRendersWithoutOrgProfile(t *testing.T) {
+	logger := tst.Setup()
+	r, db, channelController, ownerToken, joinerToken, channelID, joinerID :=
+		setupJoinNoticeTestEnv(t, "Pauline Banye", "pauline.banye", "")
+
+	defer tst.Cleanup(db)
+
+	var joinerModel models.User
+	if err := db.Postgresql.Where("id = ?", joinerID).First(&joinerModel).Error; err != nil {
+		t.Fatalf("failed to load joiner user: %v", err)
+	}
+
+	// Simulate a first-time public-channel joiner: no organization-specific
+	// profile and no NULL-organization base profile for this user.
+	if err := db.Postgresql.Where(
+		"userid = ? AND (organisation_id IS NULL OR organisation_id = (SELECT id FROM organisations WHERE id IN (SELECT organisation_id FROM channels WHERE id = ?)))",
+		joinerID, channelID,
+	).Delete(&models.Profile{}).Error; err != nil {
+		t.Fatalf("failed to remove joiner profiles: %v", err)
+	}
+
+	// Seed a decoy display name on an unrelated organization. It must never
+	// leak into this channel's notice.
+	decoyOrgID := utility.GenerateUUID()
+	if err := db.Postgresql.Create(&models.Profile{
+		ID:             utility.GenerateUUID(),
+		Userid:         joinerID,
+		OrganisationID: &decoyOrgID,
+		FullName:       "Decoy Person",
+		UserName:       "decoy.user",
+		DisplayName:    "Decoy Display",
+	}).Error; err != nil {
+		t.Fatalf("failed to seed decoy profile: %v", err)
+	}
+
+	rr := joinChannelWithBody(t, r, db, channelController, channelID, joinerToken, `{"username":"Intruder Supplied"}`)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected status 200 for join, got %d: %s", rr.Code, rr.Body.String())
+	}
+
+	time.Sleep(2 * time.Second)
+
+	sysMsg := tst.FetchSystemMessage(t, db, logger, channelID, ownerToken)
+	if sysMsg == nil {
+		t.Fatal("expected a join system message to exist for a first-time joiner without an org profile")
+	}
+	content, ok := sysMsg["message"].(string)
+	if !ok {
+		t.Fatal("join system message has no message content")
+	}
+	if !strings.Contains(content, fmt.Sprintf(`data-id="%s"`, joinerID)) {
+		t.Errorf("expected join notice mention to reference user id %q, got %q", joinerID, content)
+	}
+	if strings.Contains(content, "Decoy Display") || strings.Contains(content, "decoy.user") {
+		t.Errorf("expected join notice to ignore unrelated organization profile, got %q", content)
+	}
+	if strings.Contains(content, "Intruder Supplied") {
+		t.Errorf("expected join notice to ignore client-supplied username, got %q", content)
+	}
+	if strings.TrimSpace(content) == "" {
+		t.Errorf("expected a non-empty join notice, got %q", content)
+	}
+}
