@@ -19,6 +19,7 @@ concurrency:
 jobs:
   commits:
     name: Lint commit messages
+    if: ${{ !startsWith(github.head_ref, 'sync/') }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
