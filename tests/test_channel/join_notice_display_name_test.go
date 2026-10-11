@@ -115,6 +115,9 @@ func setupJoinNoticeTestEnv(t *testing.T, fullName, userName, displayName string
 	return r, db, channelController, ownerToken, joinerToken, channelID, joinerModel.ID
 }
 
+// joinChannelWithBody posts a channel-join request with the given raw JSON
+// body and authorization token, returning the raw HTTP response recorder so
+// tests can exercise arbitrary (including legacy client-supplied) payloads.
 func joinChannelWithBody(t *testing.T, r *gin.Engine, db *storage.Database, channelController channel.Controller, channelID, token, body string) *httptest.ResponseRecorder {
 	t.Helper()
 	joinRouter := gin.Default()
@@ -129,6 +132,10 @@ func joinChannelWithBody(t *testing.T, r *gin.Engine, db *storage.Database, chan
 	joinRouter.ServeHTTP(rr, req)
 	return rr
 }
+
+// TestChannelJoinNoticeUsesDisplayName verifies that the join system
+// notice renders the joiner's configured organization display name
+// ("Lynn B") rather than their full name.
 func TestChannelJoinNoticeUsesDisplayName(t *testing.T) {
 	logger := tst.Setup()
 	r, db, channelController, ownerToken, joinerToken, channelID, _ :=
@@ -159,6 +166,10 @@ func TestChannelJoinNoticeUsesDisplayName(t *testing.T) {
 	}
 }
 
+// TestChannelJoinNoticeIgnoresClientSuppliedUsername verifies that a
+// username string supplied by the client in the join request body (the
+// legacy frontend sends the user's full name) never becomes the notice
+// label; the server-side display name is used instead.
 func TestChannelJoinNoticeIgnoresClientSuppliedUsername(t *testing.T) {
 	logger := tst.Setup()
 	r, db, channelController, ownerToken, joinerToken, channelID, _ :=
@@ -191,6 +202,9 @@ func TestChannelJoinNoticeIgnoresClientSuppliedUsername(t *testing.T) {
 	}
 }
 
+// TestChannelJoinNoticeFallsBackToUsername verifies that when no display
+// name is configured for the joiner, the notice label falls back to their
+// profile username ("pauline.banye") and still omits the full name.
 func TestChannelJoinNoticeFallsBackToUsername(t *testing.T) {
 	logger := tst.Setup()
 	r, db, channelController, ownerToken, joinerToken, channelID, _ :=
@@ -221,6 +235,9 @@ func TestChannelJoinNoticeFallsBackToUsername(t *testing.T) {
 	}
 }
 
+// TestChannelJoinNoticeMentionReferencesUserID verifies that the mention
+// embedded in the join notice references the joiner's real user ID in its
+// data-id attribute, regardless of the label rendered.
 func TestChannelJoinNoticeMentionReferencesUserID(t *testing.T) {
 	logger := tst.Setup()
 	r, db, channelController, ownerToken, joinerToken, channelID, joinerID :=
@@ -248,6 +265,11 @@ func TestChannelJoinNoticeMentionReferencesUserID(t *testing.T) {
 	}
 }
 
+// TestChannelJoinNoticeRendersWithoutOrgProfile simulates a first-time
+// joiner with no organization-specific profile (a decoy profile seeded on
+// an unrelated organization must not leak) and verifies the notice is still
+// rendered via the account-level fallback, references the joiner's user ID,
+// and ignores both the decoy profile names and the client-supplied username.
 func TestChannelJoinNoticeRendersWithoutOrgProfile(t *testing.T) {
 	logger := tst.Setup()
 	r, db, channelController, ownerToken, joinerToken, channelID, joinerID :=

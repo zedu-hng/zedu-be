@@ -140,6 +140,12 @@ func SaveOrMergeJoinSystemMessage(db *storage.Database, logger *utility.Logger, 
 	return err
 }
 
+// extractUsersFromSource rebuilds the participant list of a stored channel
+// join/leave system message from its source payload. Every stored user ID
+// is re-resolved against the server-side profile via
+// models.BuildChannelJoinMentions so merged notices always display current
+// display names; legacy stored labels and raw IDs are never reused as
+// authoritative labels, and unresolvable IDs are dropped.
 func extractUsersFromSource(db *storage.Database, source map[string]any, orgID string) []models.UserMention {
 	var users []models.UserMention
 	seen := make(map[string]bool)

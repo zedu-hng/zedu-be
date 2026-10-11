@@ -371,6 +371,12 @@ func addUserToOrganisation(orgmgt models.OrgUserManagement, db *gorm.DB) error {
 	return nil
 }
 
+// addUserToChannel adds an invited user to the channel they were invited
+// to and stores the corresponding join system message. The mention label is
+// resolved server-side via models.NewChannelJoinMention (organization
+// display name, then profile username, then account username, then email
+// prefix); if no trusted label is available the join succeeds but the
+// system message is skipped and the failure is logged.
 func addUserToChannel(chans *models.Channels, orgmgt models.OrgUserManagement, logger *utility.Logger, gormDB *gorm.DB, storageDB *storage.Database) error {
 	var profile models.Profile
 

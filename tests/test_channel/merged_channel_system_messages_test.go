@@ -7,6 +7,10 @@ import (
 	"github.com/hngprojects/telex_be/internal/models"
 )
 
+// TestMergedChannelJoinAndLeaveMessages exercises the merged join/leave
+// system-message formatting for every participant count and attribution
+// combination (self-joined vs added/removed by an inviter), asserting the
+// exact rendered HTML including mention markup and pluralised wording.
 func TestMergedChannelJoinAndLeaveMessages(t *testing.T) {
 	users := []models.UserMention{
 		{UserID: "u1", Username: "elizabeth"},
@@ -90,6 +94,9 @@ func TestMergedChannelJoinAndLeaveMessages(t *testing.T) {
 	})
 }
 
+// TestMergedJoinNoticePreservesResolvedDisplayNames verifies that a merged
+// join notice keeps each participant's server-resolved display name and
+// user ID in its mention markup, and never falls back to a full name.
 func TestMergedJoinNoticePreservesResolvedDisplayNames(t *testing.T) {
 	users := []models.UserMention{
 		{UserID: "u1", Username: "Lynn B"},

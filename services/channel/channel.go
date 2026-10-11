@@ -157,6 +157,11 @@ func GetChannelsMsg(channelId, userID string, db *gorm.DB) (models.MessagesResp,
 
 }
 
+// JoinChannels adds the requesting user to a channel they are not yet a
+// member of. When the channel has ShowJoinedMessage enabled it also emits a
+// join system notice whose label is resolved server-side from trusted
+// backend data (display name, then username, then email prefix) via
+// models.NewChannelJoinMention, never from client-supplied request data.
 func JoinChannels(db *storage.Database, req models.JoinChannelsRequest, logger *utility.Logger) (models.Channels, int, error) {
 	var (
 		r models.Channels
@@ -349,6 +354,11 @@ func GetUsersInChannel(ids models.IDS, db *gorm.DB, c *gin.Context) ([]models.Ch
 	return users, paginationResponse, nil
 }
 
+// AddMembersToChannel adds a member to a channel on behalf of an existing
+// member. The join system notice it emits uses a server-resolved label
+// (display name, then username, then email prefix) from
+// models.NewChannelJoinMention; if no trusted label can be resolved the
+// notice is skipped rather than stored with blank or client-supplied text.
 func AddMembersToChannel(db *storage.Database, req models.JoinChannelsRequest, logger *utility.Logger) (models.Channels, error) {
 	var (
 		r models.Channels
@@ -384,6 +394,11 @@ func AddMembersToChannel(db *storage.Database, req models.JoinChannelsRequest, l
 	return channel, nil
 }
 
+// AddMultipleMembersToChannel adds several users to a channel at once and,
+// when the channel shows joined messages, emits a single join notice for
+// the batch. Labels for all participants are resolved in order by
+// models.BuildChannelJoinMentions, so unresolvable users are omitted and
+// no blank mention is ever stored.
 func AddMultipleMembersToChannel(db *storage.Database, req models.AddMultipleMembersRequest, logger *utility.Logger) error {
 	var ch models.Channels
 
