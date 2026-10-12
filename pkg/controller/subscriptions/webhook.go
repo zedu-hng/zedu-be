@@ -9,11 +9,19 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/hngprojects/telex_be/internal/config"
 	"github.com/hngprojects/telex_be/internal/models"
 	service "github.com/hngprojects/telex_be/services/subscription"
 	"github.com/hngprojects/telex_be/utility"
 	"github.com/stripe/stripe-go/v72"
+	"github.com/stripe/stripe-go/v72/checkout/session"
+	"github.com/stripe/stripe-go/v72/webhook"
 )
+
+// GetCheckoutSession is a variable so tests can replace the Stripe API call.
+var GetCheckoutSession = func(id string) (*stripe.CheckoutSession, error) {
+	return session.Get(id, nil)
+}
 
 func (base *Controller) HandleStripeWebhook(c *gin.Context) {
 	body, err := io.ReadAll(c.Request.Body)
@@ -24,10 +32,19 @@ func (base *Controller) HandleStripeWebhook(c *gin.Context) {
 		return
 	}
 	// base.Logger.Info("DEBUG: Webhook body: %s\n", string(body))
-	var event stripe.Event
-	if err := json.Unmarshal(body, &event); err != nil {
-		base.Logger.Error("Error parsing event: " + err.Error())
-		rd := utility.BuildErrorResponse(http.StatusBadRequest, "error", "Invalid event data", nil, nil)
+
+	// An empty secret would let anyone create a valid signature, so refuse to run without one.
+	secret := config.GetConfig().Stripe.STRIPE_WEBHOOK_SECRET
+	if secret == "" {
+		base.Logger.Error("STRIPE_WEBHOOK_SECRET is not set; rejecting Stripe webhook")
+		rd := utility.BuildErrorResponse(http.StatusInternalServerError, "error", "Webhook is not configured", nil, nil)
+		c.JSON(http.StatusInternalServerError, rd)
+		return
+	}
+	event, err := webhook.ConstructEvent(body, c.GetHeader("Stripe-Signature"), secret)
+	if err != nil {
+		base.Logger.Error("Stripe webhook signature check failed: " + err.Error())
+		rd := utility.BuildErrorResponse(http.StatusBadRequest, "error", "Invalid signature", nil, nil)
 		c.JSON(http.StatusBadRequest, rd)
 		return
 	}
@@ -76,8 +93,24 @@ func (base *Controller) HandleStripeWebhook(c *gin.Context) {
 
 		switch checkoutSession.Metadata["flow"] {
 		case "credit_topup":
-			org_id := checkoutSession.Metadata["org_id"]
-			plan_id := checkoutSession.Metadata["plan_id"]
+			// Credits are only added for a session Stripe confirms as paid, using
+			// Stripe's copy of the metadata rather than the request body.
+			stripeSession, err := GetCheckoutSession(checkoutSession.ID)
+			if err != nil {
+				base.Logger.Error(fmt.Sprintf("Error getting session %s from Stripe: %v", checkoutSession.ID, err.Error()))
+				rd := utility.BuildErrorResponse(http.StatusBadRequest, "error", "Error getting session", nil, nil)
+				c.JSON(http.StatusBadRequest, rd)
+				return
+			}
+			if stripeSession.PaymentStatus != stripe.CheckoutSessionPaymentStatusPaid {
+				base.Logger.Error(fmt.Sprintf("Credit top-up session %s is not paid", checkoutSession.ID))
+				rd := utility.BuildErrorResponse(http.StatusBadRequest, "error", "Session not paid", nil, nil)
+				c.JSON(http.StatusBadRequest, rd)
+				return
+			}
+
+			org_id := stripeSession.Metadata["org_id"]
+			plan_id := stripeSession.Metadata["plan_id"]
 
 			_, code, err := models.TopUpOrgCredit(base.Db.Postgresql, org_id, plan_id, &checkoutSession.ID)
 			if err != nil {

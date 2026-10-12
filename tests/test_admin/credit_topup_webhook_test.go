@@ -30,6 +30,9 @@ func TestCreditTopupWebhook_Success(t *testing.T) {
 	packageID := CreateTestCreditPackage(t, db.Postgresql, 1000, 5.00)
 	sessionID := fmt.Sprintf("cs_test_%s", utility.GenerateUUID())
 
+	useWebhookSecret(t, testWebhookSecret)
+	stubStripeSession(t, paidCreditSession(orgID, packageID, sessionID))
+
 	webhookController := subscriptions.Controller{
 		Db:        db,
 		Validator: validator,
@@ -45,7 +48,7 @@ func TestCreditTopupWebhook_Success(t *testing.T) {
 	eventJSON, _ := json.Marshal(webhookEvent)
 	req, _ := http.NewRequest(http.MethodPost, "/api/v1/subscriptions/webhook", bytes.NewBuffer(eventJSON))
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Stripe-Signature", "test_signature")
+	req.Header.Set("Stripe-Signature", signStripePayload(eventJSON, testWebhookSecret))
 
 	rr := httptest.NewRecorder()
 	r.ServeHTTP(rr, req)
@@ -83,6 +86,9 @@ func TestCreditTopupWebhook_InvalidPackageID(t *testing.T) {
 	orgID := CreateOrganizationWithCredit(t, db.Postgresql, 0.00)
 	sessionID := fmt.Sprintf("cs_test_%s", utility.GenerateUUID())
 
+	useWebhookSecret(t, testWebhookSecret)
+	stubStripeSession(t, paidCreditSession(orgID, "00000000-0000-0000-0000-000000000000", sessionID))
+
 	webhookController := subscriptions.Controller{
 		Db:        db,
 		Validator: validator,
@@ -98,7 +104,7 @@ func TestCreditTopupWebhook_InvalidPackageID(t *testing.T) {
 	eventJSON, _ := json.Marshal(webhookEvent)
 	req, _ := http.NewRequest(http.MethodPost, "/api/v1/subscriptions/webhook", bytes.NewBuffer(eventJSON))
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Stripe-Signature", "test_signature")
+	req.Header.Set("Stripe-Signature", signStripePayload(eventJSON, testWebhookSecret))
 
 	rr := httptest.NewRecorder()
 	r.ServeHTTP(rr, req)
@@ -126,6 +132,9 @@ func TestCreditTopupWebhook_InvalidOrgID(t *testing.T) {
 	packageID := CreateTestCreditPackage(t, db.Postgresql, 1000, 5.00)
 	sessionID := fmt.Sprintf("cs_test_%s", utility.GenerateUUID())
 
+	useWebhookSecret(t, testWebhookSecret)
+	stubStripeSession(t, paidCreditSession("00000000-0000-0000-0000-000000000000", packageID, sessionID))
+
 	webhookController := subscriptions.Controller{
 		Db:        db,
 		Validator: validator,
@@ -142,7 +151,7 @@ func TestCreditTopupWebhook_InvalidOrgID(t *testing.T) {
 	eventJSON, _ := json.Marshal(webhookEvent)
 	req, _ := http.NewRequest(http.MethodPost, "/api/v1/subscriptions/webhook", bytes.NewBuffer(eventJSON))
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Stripe-Signature", "test_signature")
+	req.Header.Set("Stripe-Signature", signStripePayload(eventJSON, testWebhookSecret))
 
 	rr := httptest.NewRecorder()
 	r.ServeHTTP(rr, req)
@@ -171,6 +180,9 @@ func TestCreditTopupWebhook_WithExistingCreditUsage(t *testing.T) {
 	CreateCreditUsage(t, db.Postgresql, orgID, 20.00)
 	CreateCreditUsage(t, db.Postgresql, orgID, 30.00)
 
+	useWebhookSecret(t, testWebhookSecret)
+	stubStripeSession(t, paidCreditSession(orgID, packageID, sessionID))
+
 	webhookController := subscriptions.Controller{
 		Db:        db,
 		Validator: validator,
@@ -186,7 +198,7 @@ func TestCreditTopupWebhook_WithExistingCreditUsage(t *testing.T) {
 	eventJSON, _ := json.Marshal(webhookEvent)
 	req, _ := http.NewRequest(http.MethodPost, "/api/v1/subscriptions/webhook", bytes.NewBuffer(eventJSON))
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Stripe-Signature", "test_signature")
+	req.Header.Set("Stripe-Signature", signStripePayload(eventJSON, testWebhookSecret))
 
 	rr := httptest.NewRecorder()
 	r.ServeHTTP(rr, req)
