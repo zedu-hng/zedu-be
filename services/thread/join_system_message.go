@@ -75,7 +75,10 @@ func SaveOrMergeJoinSystemMessage(db *storage.Database, logger *utility.Logger, 
 
 							if threadID != "" {
 								// Extract existing joined users & adder from stored metadata or payload
-								existingUsers := extractUsersFromSource(db, source, orgID)
+								existingUsers, err := extractUsersFromSource(db, source, orgID)
+								if err != nil {
+									return err
+								}
 								combinedUsers := mergeUserMentions(existingUsers, newUsers)
 
 								activeAdder := adder
@@ -151,7 +154,7 @@ func SaveOrMergeJoinSystemMessage(db *storage.Database, logger *utility.Logger, 
 	return err
 }
 
-func extractUsersFromSource(db *storage.Database, source map[string]any, orgID string) []models.UserMention {
+func extractUsersFromSource(db *storage.Database, source map[string]any, orgID string) ([]models.UserMention, error) {
 	var users []models.UserMention
 	seen := make(map[string]bool)
 
@@ -169,18 +172,25 @@ func extractUsersFromSource(db *storage.Database, source map[string]any, orgID s
 		}
 		// Re-resolve every stored participant ID against the server-side
 		// profile so merged notices always show current display names.
-		// Unresolvable IDs are dropped; legacy stored labels and raw IDs
-		// are never reused as authoritative labels.
-		users = append(users, models.BuildChannelJoinMentions(db.Postgresql, ids, orgID)...)
+		// Lookup failures must not erase participants from an existing notice.
+		resolved, err := models.BuildChannelJoinMentions(db.Postgresql, ids, orgID)
+		if err != nil {
+			return nil, err
+		}
+		users = append(users, resolved...)
 	}
 
 	if len(users) == 0 {
 		if uID := utility.GetString(source, "user_id"); uID != "" {
-			users = append(users, models.BuildChannelJoinMentions(db.Postgresql, []string{uID}, orgID)...)
+			resolved, err := models.BuildChannelJoinMentions(db.Postgresql, []string{uID}, orgID)
+			if err != nil {
+				return nil, err
+			}
+			users = append(users, resolved...)
 		}
 	}
 
-	return users
+	return users, nil
 }
 
 func extractAdderFromSource(source map[string]any) *models.UserMention {
@@ -263,7 +273,10 @@ func SaveOrMergeLeaveSystemMessage(db *storage.Database, logger *utility.Logger,
 
 							msgContent := utility.GetString(source, "message")
 							if threadID != "" && (strings.Contains(strings.ToLower(msgContent), "left") || strings.Contains(strings.ToLower(msgContent), "removed")) {
-								existingUsers := extractUsersFromSource(db, source, orgID)
+								existingUsers, err := extractUsersFromSource(db, source, orgID)
+								if err != nil {
+									return err
+								}
 								combinedUsers := mergeUserMentions(existingUsers, leftUsers)
 
 								activeRemover := remover

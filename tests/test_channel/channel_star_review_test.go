@@ -157,6 +157,16 @@ func TestChannelStarForeignKeys(t *testing.T) {
 		if err := tx.Exec(string(migration)).Error; err != nil {
 			t.Fatalf("%s: %v", name, err)
 		}
+		if name == "000003_add_channel_stars.up.sql" {
+			orphan := models.ChannelStar{ID: utility.GenerateUUID(), UserId: utility.GenerateUUID(), ChannelId: utility.GenerateUUID(), OrgId: utility.GenerateUUID()}
+			if err := tx.Omit("User", "Channel", "Organisation").Create(&orphan).Error; err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	var orphanCount int64
+	if err := tx.Model(&models.ChannelStar{}).Count(&orphanCount).Error; err != nil || orphanCount != 0 {
+		t.Fatalf("migration must remove orphaned stars before adding constraints: count=%d err=%v", orphanCount, err)
 	}
 	for _, table := range []string{"users", "channels", "organisations"} {
 		t.Run("cascade deleting "+table, func(t *testing.T) {
