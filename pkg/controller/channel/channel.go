@@ -1187,10 +1187,18 @@ func (base *Controller) ToggleStarChannel(c *gin.Context) {
 		return
 	}
 
-	if paramOrgId := c.Param("org_id"); paramOrgId != "" && paramOrgId != ch.OrganisationID {
-		rd := utility.BuildErrorResponse(http.StatusNotFound, "error", "channel not found", errors.New("channel not found in organisation"), nil)
-		c.JSON(http.StatusNotFound, rd)
-		return
+	if paramOrgId := c.Param("org_id"); paramOrgId != "" {
+		orgID, err := uuid.Parse(paramOrgId)
+		if err != nil {
+			rd := utility.BuildErrorResponse(http.StatusBadRequest, "error", "invalid organisation id format", err, nil)
+			c.JSON(http.StatusBadRequest, rd)
+			return
+		}
+		if orgID.String() != ch.OrganisationID {
+			rd := utility.BuildErrorResponse(http.StatusNotFound, "error", "channel not found", errors.New("channel not found in organisation"), nil)
+			c.JSON(http.StatusNotFound, rd)
+			return
+		}
 	}
 
 	req := models.ChannelStarRequest{

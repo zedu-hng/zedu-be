@@ -691,6 +691,14 @@ func ToggleStarChannel(req models.ChannelStarRequest, db *gorm.DB) (bool, int, e
 }
 
 func GetStarredChannels(db *storage.Database, ids models.IDS) (models.GetUserChannelResp, int, error) {
+	var org models.Organisation
+	if err, _ := postgresql.SelectOneFromDb(db.Postgresql, &org, "id = ?", ids.OrganisationID); err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, http.StatusNotFound, errors.New("organisation not found")
+		}
+		return nil, http.StatusInternalServerError, err
+	}
+
 	starredChannelIds, err := models.GetUserStarredChannelIds(db.Postgresql, ids.UserID, ids.OrganisationID)
 	if err != nil {
 		return nil, http.StatusInternalServerError, err
@@ -700,22 +708,12 @@ func GetStarredChannels(db *storage.Database, ids models.IDS) (models.GetUserCha
 		return models.GetUserChannelResp{}, http.StatusOK, nil
 	}
 
-	userChannels, err := GetUserChannels(db, ids)
+	ids.ChannelIDs = starredChannelIds
+	var uc models.UserChannels
+	userChannels, err := uc.GetUserChannels(db, ids)
 	if err != nil {
 		return nil, http.StatusInternalServerError, err
 	}
 
-	starredMap := make(map[string]bool)
-	for _, id := range starredChannelIds {
-		starredMap[id] = true
-	}
-
-	starredList := models.GetUserChannelResp{}
-	for _, ch := range userChannels {
-		if starredMap[ch.ID] {
-			starredList = append(starredList, ch)
-		}
-	}
-
-	return starredList, http.StatusOK, nil
+	return userChannels, http.StatusOK, nil
 }

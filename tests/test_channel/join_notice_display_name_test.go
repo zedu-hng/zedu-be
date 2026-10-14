@@ -18,6 +18,7 @@ import (
 	"github.com/hngprojects/telex_be/pkg/controller/organisation"
 	"github.com/hngprojects/telex_be/pkg/middleware"
 	"github.com/hngprojects/telex_be/pkg/repository/storage"
+	"github.com/hngprojects/telex_be/pkg/repository/storage/elastic"
 	tst "github.com/hngprojects/telex_be/tests"
 	"github.com/hngprojects/telex_be/utility"
 )
@@ -156,6 +157,22 @@ func TestChannelJoinNoticeUsesDisplayName(t *testing.T) {
 	}
 	if strings.Contains(content, "Pauline Banye") {
 		t.Errorf("expected join notice to omit full name, got %q", content)
+	}
+	var records any
+	query := map[string]any{"query": map[string]any{"term": map[string]any{"channels_id": channelID}}}
+	if err := elastic.SelectAll(db.Elastic, models.ThreadIndexName, query, &records); err != nil {
+		t.Fatal(err)
+	}
+	hits := records.(map[string]any)["hits"].(map[string]any)["hits"].([]any)
+	creationCount := 0
+	for _, hit := range hits {
+		source := hit.(map[string]any)["_source"].(map[string]any)
+		if strings.Contains(utility.GetString(source, "message"), " created #") {
+			creationCount++
+		}
+	}
+	if creationCount != 1 {
+		t.Fatalf("joining must preserve the channel creation notice; got %d creation notices", creationCount)
 	}
 }
 
