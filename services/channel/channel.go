@@ -392,7 +392,10 @@ func AddMultipleMembersToChannel(db *storage.Database, req models.AddMultipleMem
 		return err
 	}
 
-	newUsers := models.BuildChannelJoinMentions(db.Postgresql, validUserIds, ch.OrganisationID)
+	newUsers, mentionErr := models.BuildChannelJoinMentions(db.Postgresql, validUserIds, ch.OrganisationID)
+	if mentionErr != nil {
+		logger.Error("failed to resolve join notice participants, skipping system message: %v", mentionErr)
+	}
 
 	if len(newUsers) > 0 && ch.ShowJoinedMessage {
 		_ = thread.SaveOrMergeJoinSystemMessage(db, logger, ch.ID, ch.Name, ch.OrganisationID, newUsers, nil)

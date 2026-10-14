@@ -73,9 +73,10 @@ func NewChannelJoinMention(db *gorm.DB, userID, orgID string) (UserMention, erro
 // BuildChannelJoinMentions resolves server-side labels for a batch of
 // channel joiners, preserving their order and IDs. Entries that cannot be
 // resolved to any label are skipped so no blank mention is ever stored.
-func BuildChannelJoinMentions(db *gorm.DB, userIDs []string, orgID string) []UserMention {
+// Profile lookup failures abort the batch to preserve stored participants.
+func BuildChannelJoinMentions(db *gorm.DB, userIDs []string, orgID string) ([]UserMention, error) {
 	if len(userIDs) == 0 {
-		return nil
+		return nil, nil
 	}
 	mentions := make([]UserMention, 0, len(userIDs))
 	seen := make(map[string]bool, len(userIDs))
@@ -85,10 +86,13 @@ func BuildChannelJoinMentions(db *gorm.DB, userIDs []string, orgID string) []Use
 		}
 		seen[userID] = true
 		mention, err := NewChannelJoinMention(db, userID, orgID)
-		if err != nil || mention.Username == "" {
+		if errors.Is(err, ErrJoinNoticeNoLabel) {
 			continue
+		}
+		if err != nil {
+			return nil, err
 		}
 		mentions = append(mentions, mention)
 	}
-	return mentions
+	return mentions, nil
 }

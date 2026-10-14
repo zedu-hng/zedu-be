@@ -4,6 +4,11 @@ BEGIN
     IF to_regclass('users') IS NULL OR to_regclass('channels') IS NULL OR to_regclass('organisations') IS NULL THEN
         RETURN;
     END IF;
+    DELETE FROM channel_stars AS star
+    WHERE NOT EXISTS (SELECT 1 FROM users WHERE id = star.user_id)
+       OR NOT EXISTS (SELECT 1 FROM channels WHERE id = star.channel_id)
+       OR NOT EXISTS (SELECT 1 FROM organisations WHERE id = star.org_id);
+
     IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_channel_stars_user' AND conrelid = 'channel_stars'::regclass) THEN
         ALTER TABLE channel_stars ADD CONSTRAINT fk_channel_stars_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
     END IF;
