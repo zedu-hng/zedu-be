@@ -1,11 +1,29 @@
 package test_channel
 
 import (
+	"html"
 	"strings"
 	"testing"
 
 	"github.com/hngprojects/telex_be/internal/models"
 )
+
+func TestNoticeLabelsAreEscaped(t *testing.T) {
+	label := `"><img src=x onerror=alert(1)>&'`
+	users := []models.UserMention{{UserID: "u1", Username: label}, {UserID: "u2", Username: label}}
+	actor := &models.UserMention{UserID: "actor", Username: label}
+	for _, message := range []string{
+		models.FormatMergedChannelJoinMessage(users, actor, "general"),
+		models.FormatMergedChannelLeaveMessage(users, actor, "general"),
+	} {
+		if strings.Contains(message, label) || strings.Contains(message, "<img") {
+			t.Fatalf("unsafe profile HTML reached a notice: %s", message)
+		}
+		if strings.Count(message, html.EscapeString(label)) != 6 {
+			t.Fatalf("all participant and actor attribute/text labels must be escaped: %s", message)
+		}
+	}
+}
 
 func TestMergedChannelJoinAndLeaveMessages(t *testing.T) {
 	users := []models.UserMention{

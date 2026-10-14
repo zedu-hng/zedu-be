@@ -1,6 +1,7 @@
 package models
 
 import (
+	"errors"
 	"time"
 
 	"gorm.io/gorm"
@@ -60,9 +61,13 @@ func (s *ChannelStar) IsStarChannel(db *gorm.DB, req ChannelStarRequest) bool {
 	return postgresql.CheckExists(db, &ChannelStar{}, "user_id = ? AND channel_id = ? AND org_id = ?", req.UserId, req.ChannelId, req.OrgId)
 }
 
-func IsChannelStarred(db *gorm.DB, userId, channelId string) bool {
+func IsChannelStarred(db *gorm.DB, userId, channelId string) (bool, error) {
 	var star ChannelStar
-	return postgresql.CheckExists(db, &star, "user_id = ? AND channel_id = ?", userId, channelId)
+	err, _ := postgresql.SelectOneFromDb(db, &star, "user_id = ? AND channel_id = ?", userId, channelId)
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return false, nil
+	}
+	return err == nil, err
 }
 
 func GetUserStarredChannelIds(db *gorm.DB, userId, orgId string) ([]string, error) {

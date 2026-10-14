@@ -531,7 +531,10 @@ func (r *Channels) GetChannelByID(db *storage.Database, chanReq ChannelInfo) (Ge
 
 	var isStarred bool
 	if db != nil {
-		isStarred = IsChannelStarred(db.Postgresql, chanReq.UserID, chanReq.ChannelID)
+		isStarred, err = IsChannelStarred(db.Postgresql, chanReq.UserID, chanReq.ChannelID)
+		if err != nil {
+			return chanResp, fmt.Errorf("could not get channel star status: %w", err)
+		}
 	}
 
 	chanResp = GetChannelResp{
