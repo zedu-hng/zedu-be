@@ -9,12 +9,15 @@ import (
 )
 
 type ChannelStar struct {
-	ID        string         `gorm:"type:uuid;primary_key" json:"id"`
-	UserId    string         `gorm:"type:uuid;not null;uniqueIndex:idx_channel_star_user_channel,where:deleted_at IS NULL" json:"user_id"`
-	ChannelId string         `gorm:"type:uuid;not null;uniqueIndex:idx_channel_star_user_channel,where:deleted_at IS NULL" json:"channel_id"`
-	OrgId     string         `gorm:"type:uuid;not null" json:"org_id"`
-	CreatedAt time.Time      `gorm:"type:timestamp;default:current_timestamp" json:"created_at"`
-	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`
+	ID           string         `gorm:"type:uuid;primary_key" json:"id"`
+	UserId       string         `gorm:"type:uuid;not null;uniqueIndex:idx_channel_star_user_channel,where:deleted_at IS NULL" json:"user_id"`
+	ChannelId    string         `gorm:"type:uuid;not null;uniqueIndex:idx_channel_star_user_channel,where:deleted_at IS NULL" json:"channel_id"`
+	OrgId        string         `gorm:"type:uuid;not null" json:"org_id"`
+	CreatedAt    time.Time      `gorm:"type:timestamp;default:current_timestamp" json:"created_at"`
+	DeletedAt    gorm.DeletedAt `gorm:"index" json:"-"`
+	User         User           `gorm:"foreignKey:UserId;references:ID;constraint:OnDelete:CASCADE" json:"-"`
+	Channel      Channels       `gorm:"foreignKey:ChannelId;references:ID;constraint:OnDelete:CASCADE" json:"-"`
+	Organisation Organisation   `gorm:"foreignKey:OrgId;references:ID;constraint:OnDelete:CASCADE" json:"-"`
 }
 
 func (ChannelStar) TableName() string {

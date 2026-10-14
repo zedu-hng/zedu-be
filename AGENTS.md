@@ -86,9 +86,8 @@ failures. Do not report success on a red build.
   open a PR.
 - Branch name: `<type>/<TICKET-ID>-<short-desc>` (e.g. `feat/ZED-142-channel-pins`).
 - Conventional commits only: `type(scope): description` (e.g. `fix: guard nil thread on DM list`).
-- At most **one open PR per author**; keep the PR small and atomic.
+- Teams may open a batch/consolidated PR from their fork that combines the team's work.
 - Fill the PR template completely — the ticket ID is mandatory.
-- Wrap new user-facing behaviour in a **feature flag**, default OFF.
 - Database changes follow **expand → contract**: ship additive migrations first, remove later.
 - The following files are **protected** and need lead approval before changing:
   `.github/`, `Dockerfile`, `Dockerfile.dev`, `docker-compose*.yml`, `Makefile`, `.air.toml`,

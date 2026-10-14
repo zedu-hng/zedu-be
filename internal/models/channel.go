@@ -1208,6 +1208,9 @@ func (uc *UserChannels) GetUserChannels(base *storage.Database, ids IDS) (GetUse
 	if search != "" {
 		query = query.Where("channels.name ILIKE ?", "%"+search+"%")
 	}
+	if ids.ChannelIDs != nil {
+		query = query.Where("channels.id IN ?", ids.ChannelIDs)
+	}
 
 	if err := query.Order("channels.created_at DESC").Scan(&chanResp).Error; err != nil {
 		return nil, errors.New("error fetching channels")
@@ -1326,7 +1329,10 @@ func (uc *UserChannels) GetUserChannels(base *storage.Database, ids IDS) (GetUse
 		chanResp[i].ChannelSlug = fmt.Sprintf("%s-%s", slug.Make(chanResp[i].Name), lastPart)
 	}
 
-	starredChannelIds, _ := GetUserStarredChannelIds(db, ids.UserID, ids.OrganisationID)
+	starredChannelIds, err := GetUserStarredChannelIds(db, ids.UserID, ids.OrganisationID)
+	if err != nil {
+		return nil, fmt.Errorf("error fetching starred channels: %w", err)
+	}
 	starredMap := make(map[string]bool)
 	for _, id := range starredChannelIds {
 		starredMap[id] = true

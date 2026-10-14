@@ -20,7 +20,8 @@ func NoticeLabelForProfile(profile Profile) string {
 
 // LoadJoinNoticeProfile fetches a user's channel-visible profile with a
 // strictly read-only resolution: org-scoped profile first, then the
-// unscoped base profile. Unlike GetOrCreateProfileForOrg, it never binds,
+// unscoped base profile or the oldest profile, matching the legacy resolver.
+// Unlike GetOrCreateProfileForOrg, it never binds,
 // creates, or caches profiles — a join notice must not mutate membership data.
 // A genuine database failure on the org-scoped query is propagated
 // immediately; only a record-not-found falls through to the base profile.
@@ -36,7 +37,13 @@ func LoadJoinNoticeProfile(db *gorm.DB, userID, orgID string) (Profile, error) {
 		}
 	}
 	if err := db.Where("userid = ? AND organisation_id IS NULL", userID).Order("created_at asc").First(&profile).Error; err != nil {
-		return Profile{}, err
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return Profile{}, err
+		}
+		// Signup may already have bound the original profile to a personal org.
+		if err := db.Where("userid = ?", userID).Order("created_at asc").First(&profile).Error; err != nil {
+			return Profile{}, err
+		}
 	}
 	return profile, nil
 }

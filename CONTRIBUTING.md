@@ -14,7 +14,6 @@ work is proposed, reviewed and merged. For the detailed Go engineering standards
 - [Opening a pull request](#opening-a-pull-request)
 - [Testing requirements](#testing-requirements)
 - [Code standards](#code-standards)
-- [Feature flags](#feature-flags)
 - [Database changes](#database-changes)
 - [Protected files](#protected-files)
 - [Code review](#code-review)
@@ -28,7 +27,7 @@ work is proposed, reviewed and merged. For the detailed Go engineering standards
 1. Search existing issues before opening a new one.
 2. Open an issue to discuss larger changes before implementing.
 3. Pick up a ticket, branch from `dev`, and open a pull request.
-4. Keep changes small and focused — one feature or bug fix per branch/PR.
+4. Teams may submit a batch/consolidated PR from their fork that combines the team's work.
 
 ## Before you start
 
@@ -105,8 +104,7 @@ fix: guard nil thread on DM list
 ## Opening a pull request
 
 - Open the PR against `dev`.
-- **At most one open PR per author.** Get the previous one merged before opening the next.
-- Keep the PR small and atomic; large PRs are harder to review and easier to break.
+- Teams may open a batch/consolidated PR from their fork that combines the team's work.
 - Fill the PR template completely. The **ticket ID is mandatory**.
 - Link the related issue where applicable (e.g. `Closes #123`).
 - Add the requested reviewer(s) — see [Code review](#code-review). Assign yourself as the assignee.
@@ -136,11 +134,6 @@ go test ./tests/... -p 1 -timeout 600s   # -p 1 avoids GORM auto-migrate deadloc
   wrappers and comment discipline. [`AGENTS.md`](./AGENTS.md) is the concise agent-facing summary.
 - Use the PostgreSQL and Elastic wrappers rather than ad-hoc queries.
 - Never hardcode secrets, URLs, ports or keys — add settings to `BaseConfig` and `app-sample.env`.
-
-## Feature flags
-
-- Wrap new user-facing behaviour in a **feature flag** that defaults to **OFF**.
-- Keep the flag name and default documented in the PR so reviewers can verify the safe path first.
 
 ## Database changes
 

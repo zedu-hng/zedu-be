@@ -32,6 +32,15 @@ func SaveOrMergeJoinSystemMessage(db *storage.Database, logger *utility.Logger, 
 						},
 					},
 					{
+						"bool": map[string]any{
+							"should": []map[string]any{
+								{"match_phrase": map[string]any{"message": "joined this channel"}},
+								{"match_phrase": map[string]any{"message": "has been added to this channel"}},
+							},
+							"minimum_should_match": 1,
+						},
+					},
+					{
 						"range": map[string]any{
 							"created_at": map[string]any{
 								"gte": oneHourAgo,
@@ -91,7 +100,9 @@ func SaveOrMergeJoinSystemMessage(db *storage.Database, logger *utility.Logger, 
 									"updated_at": time.Now().UTC(),
 								}
 
-								_ = elastic.UpdateDocument(db.Elastic, models.ThreadIndexName, threadID, updateFields)
+								if err := elastic.UpdateDocument(db.Elastic, models.ThreadIndexName, threadID, updateFields); err != nil {
+									return err
+								}
 
 								feed := models.FeedMessageRequest{
 									ChannelID:   channelID,

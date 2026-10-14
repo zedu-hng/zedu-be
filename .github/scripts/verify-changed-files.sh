@@ -25,6 +25,20 @@ FORBIDDEN_PATTERNS=(
 
 MAX_FILE_SIZE_BYTES=$((1024 * 1024)) # 1 MB
 
+# Generated or vendored files that are legitimately large and must not trip the size cap
+# (the generated API spec is over 1 MB). The forbidden/binary checks still apply.
+SIZE_EXEMPT_PATTERNS=(
+  '(^|/)static/swagger\.yaml$'
+)
+
+size_exempt() {
+  local f=$1 p
+  for p in "${SIZE_EXEMPT_PATTERNS[@]}"; do
+    [[ "$f" =~ $p ]] && return 0
+  done
+  return 1
+}
+
 failures=0
 
 for file in "${CHANGED[@]}"; do
@@ -40,10 +54,12 @@ for file in "${CHANGED[@]}"; do
   done
 
   if [ -f "$file" ]; then
-    size=$(wc -c <"$file" | tr -d ' ')
-    if [ "$size" -gt "$MAX_FILE_SIZE_BYTES" ]; then
-      echo "ERROR: File exceeds 1MB limit: $file (${size} bytes)"
-      failures=$((failures + 1))
+    if ! size_exempt "$file"; then
+      size=$(wc -c <"$file" | tr -d ' ')
+      if [ "$size" -gt "$MAX_FILE_SIZE_BYTES" ]; then
+        echo "ERROR: File exceeds 1MB limit: $file (${size} bytes)"
+        failures=$((failures + 1))
+      fi
     fi
 
     # MIME type, not descriptive output: ELF/Go binaries report "executable" but never "binary",
