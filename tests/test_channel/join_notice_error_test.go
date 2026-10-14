@@ -34,6 +34,10 @@ func TestNoticeMergePreservesParticipantsOnProfileError(t *testing.T) {
 
 	for _, action := range []string{"join", "leave"} {
 		t.Run(action, func(t *testing.T) {
+			message := "Previous User joined this channel"
+			if action == "leave" {
+				message = "Previous User left this channel"
+			}
 			writes := 0
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("X-Elastic-Product", "Elasticsearch")
@@ -46,6 +50,7 @@ func TestNoticeMergePreservesParticipantsOnProfileError(t *testing.T) {
 				json.NewEncoder(w).Encode(map[string]any{"hits": map[string]any{"hits": []any{
 					map[string]any{"_source": map[string]any{
 						"thread_id": "existing-notice", "user_id": "previous-user",
+						"message":  message,
 						"mentions": []any{map[string]any{"id": "previous-user", "type": "user"}},
 					}},
 				}}})
