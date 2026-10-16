@@ -605,7 +605,7 @@ func BotResponse(req models.BotRequest, db *storage.Database, logger *utility.Lo
 		Title:       fmt.Sprintf("Notification from user %s", feed.UserName),
 	}
 
-	err = push_notifications.PushOneSignalToUser(pushReq, logger, db.Postgresql)
+	err = push_notifications.PushToUser(pushReq, logger, db.Postgresql)
 	if err != nil {
 		logger.Error(fmt.Sprintf("Failed to send push notification to user %s: %v", *channel.ParticipantId, err))
 	}

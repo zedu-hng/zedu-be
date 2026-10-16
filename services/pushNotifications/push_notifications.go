@@ -8,117 +8,11 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/hngprojects/telex_be/internal/models"
-	"github.com/hngprojects/telex_be/pkg/repository/pushNotifications/firebase"
-	"github.com/hngprojects/telex_be/pkg/repository/pushNotifications/onesignal"
 	repoWebpush "github.com/hngprojects/telex_be/pkg/repository/webpush"
 	fcmtokens "github.com/hngprojects/telex_be/services/fcmTokens"
 	notificationpref "github.com/hngprojects/telex_be/services/notification_pref"
 	"github.com/hngprojects/telex_be/utility"
 )
-
-func PushFCMToUser(req models.PushRequest, logger *utility.Logger, db *gorm.DB) error {
-
-	// Check notification preferences if ChannelId and OrgId are provided
-	if req.ChannelId != "" && req.OrgId != "" {
-		shouldSend, err := notificationpref.ShouldSendNotification(db, req.UserId, req.ChannelId, req.OrgId, notificationpref.NotificationTypeAllMessages)
-		if err != nil {
-			logger.Error("failed to check notification preferences: %v", err)
-			return nil // Non-critical error
-		}
-		if !shouldSend {
-			logger.Info("User %s has muted or disabled notifications for channel %s", req.UserId, req.ChannelId)
-			return nil
-		}
-	}
-
-	title := req.Title
-	body := req.Message
-
-	fcmtoken, exists, err := fcmtokens.GetFcmTokenByUserId(req.UserId, db)
-
-	if !exists {
-		return nil
-	}
-
-	if err != nil {
-		logger.Error(fmt.Sprintf("failed to send mass push notification, %s", err.Error()))
-		return fmt.Errorf("failed to send mass push notification, %s", err.Error())
-	}
-
-	if fcmtoken == "" {
-		return nil
-	}
-
-	err = firebase.SendNotificationByFCMToken(logger, fcmtoken, title, body, req.AvatarUrl)
-
-	if err != nil {
-		logger.Error("Failed to send mass push notification, %s", err.Error())
-		return fmt.Errorf("Failed to send mass push notification, %s", err.Error())
-	}
-
-	return nil
-}
-
-func PushFCMToUsers(req models.PushRequest, logger *utility.Logger, db *gorm.DB) error {
-
-	var (
-		channel models.Channels
-	)
-
-	userArr := make([]string, 0)
-
-	if len(req.UserIds) == 0 {
-		users, err := channel.FetchChannelUsers(db, req.ChannelId, req.UserId)
-
-		if err != nil {
-			logger.Error(fmt.Sprintf("Failed to send mass push notification, %s", err.Error()))
-			return err
-		}
-
-		userArr = users
-
-	} else {
-		userArr = req.UserIds
-	}
-
-	// Filter users by preferences if ChannelId and OrgId provided
-	if req.ChannelId != "" && req.OrgId != "" {
-		filteredUsers, err := notificationpref.FilterUsersByPreferences(db, userArr, req.ChannelId, req.OrgId, notificationpref.NotificationTypeAllMessages)
-		if err != nil {
-			logger.Error("failed to filter users by preferences: %v", err)
-			return err
-		}
-		userArr = filteredUsers
-	}
-
-	if len(userArr) == 0 {
-		logger.Info("No users to send push notification to after preference filtering")
-		return nil
-	}
-
-	fcmTokens, err := fcmtokens.GetFcmTokenByUserIds(userArr, db)
-
-	if len(*fcmTokens) == 0 {
-		return nil
-	}
-
-	if err != nil {
-		logger.Error(fmt.Sprintf("Failed to send mass push notification, %s", err.Error()))
-		return err
-	}
-
-	title := ResolvePushTitle(req, db)
-	body := ResolvePushBody(req.Username, req.Message)
-
-	err = firebase.SendNotificationByFCMTokens(logger, *fcmTokens, title, body)
-
-	if err != nil {
-		logger.Error("Failed to send mass push notification, %s", err.Error())
-		return fmt.Errorf("Failed to send mass push notification, %s", err.Error())
-	}
-
-	return nil
-}
 
 // SendPush sends a push notification to a user
 func SendWebPush(req models.PushRequest, logger *utility.Logger, db *gorm.DB) error {
@@ -213,21 +107,18 @@ func ResolveNotifType(payload any) notificationpref.NotificationType {
 	return notificationpref.NotificationTypeAllMessages
 }
 
-// PushOneSignalToUser sends a OneSignal push notification to a single user
-func PushOneSignalToUser(req models.PushRequest, logger *utility.Logger, db *gorm.DB) error {
-	if payloadMap, ok := req.Payload.(map[string]interface{}); ok {
-		if msgType, exists := payloadMap["type"].(string); exists && msgType == "system" {
-			logger.Info("Skipping OneSignal notification for system message in channel %s", req.ChannelId)
-			return nil
-		}
+// PushToUser sends a push notification to a single user on every device they registered.
+func PushToUser(req models.PushRequest, logger *utility.Logger, db *gorm.DB) error {
+	if isSystemMessage(req) {
+		logger.Info("Skipping push notification for system message in channel %s", req.ChannelId)
+		return nil
 	}
 
-	// Check notification preferences if ChannelId and OrgId are provided
 	if req.ChannelId != "" && req.OrgId != "" {
 		shouldSend, err := notificationpref.ShouldSendNotification(db, req.UserId, req.ChannelId, req.OrgId, ResolveNotifType(req.Payload))
 		if err != nil {
 			logger.Error("failed to check notification preferences: %v", err)
-			return nil // Non-critical error
+			return nil
 		}
 		if !shouldSend {
 			logger.Info("User %s has muted or disabled notifications for channel %s", req.UserId, req.ChannelId)
@@ -235,53 +126,32 @@ func PushOneSignalToUser(req models.PushRequest, logger *utility.Logger, db *gor
 		}
 	}
 
-	user := &models.User{}
-
-	subscriptionID, err := user.GetOneSignalSubscriptionID(db, req.UserId)
-	if err != nil {
-		logger.Error(fmt.Sprintf("failed to get OneSignal subscription ID: %s", err.Error()))
-		return nil
-	}
-
-	if subscriptionID == "" {
-		return nil
-	}
-
-	err = onesignal.OptionalSendNotification(logger, subscriptionID, req, db, req.UserId)
-	if err != nil {
-		logger.Error(fmt.Sprintf("failed to send OneSignal notification: %s", err.Error()))
-		return nil // Non-critical error, don't fail the notification flow
+	if _, err := Dispatch(logger, db, PushDispatch{Req: req, UserIDs: []string{req.UserId}}); err != nil {
+		logger.Error("failed to send push notification: %s", err.Error())
 	}
 
 	return nil
 }
 
-// PushOneSignalToUsers sends a OneSignal push notification to multiple users
-func PushOneSignalToUsers(req models.PushRequest, logger *utility.Logger, db *gorm.DB) error {
-	if payloadMap, ok := req.Payload.(map[string]interface{}); ok {
-		if msgType, exists := payloadMap["type"].(string); exists && msgType == "system" {
-			logger.Info("Skipping OneSignal notification for system message in channel %s", req.ChannelId)
-			return nil
-		}
+// PushToUsers sends a push notification to the given users, or to the channel's members when UserIds is empty.
+func PushToUsers(req models.PushRequest, logger *utility.Logger, db *gorm.DB) error {
+	if isSystemMessage(req) {
+		logger.Info("Skipping push notification for system message in channel %s", req.ChannelId)
+		return nil
 	}
-	var (
-		channel models.Channels
-	)
 
-	userArr := make([]string, 0)
+	var channel models.Channels
+	userArr := req.UserIds
 
-	if len(req.UserIds) == 0 {
+	if len(userArr) == 0 {
 		users, err := channel.FetchChannelUsers(db, req.ChannelId, req.UserId)
 		if err != nil {
-			logger.Error(fmt.Sprintf("failed to fetch channel users: %s", err.Error()))
+			logger.Error("failed to fetch channel users: %s", err.Error())
 			return nil
 		}
 		userArr = users
-	} else {
-		userArr = req.UserIds
 	}
 
-	// Filter users by preferences if ChannelId and OrgId provided and not already filtered
 	if !req.SkipPreferenceFilter && req.ChannelId != "" && req.OrgId != "" {
 		filteredUsers, err := notificationpref.FilterUsersByPreferences(db, userArr, req.ChannelId, req.OrgId, ResolveNotifType(req.Payload))
 		if err != nil {
@@ -292,91 +162,64 @@ func PushOneSignalToUsers(req models.PushRequest, logger *utility.Logger, db *go
 	}
 
 	if len(userArr) == 0 {
-		logger.Info("No users to send OneSignal notification to after preference filtering")
-		return nil
-	}
-
-	// OPTIMIZATION: Single query instead of N+1 (matching FCM pattern at push_notifications.go:69)
-	var users []models.User
-	if err := db.Where("id IN ?", userArr).
-		Select("id", "onesignal_subscription_id").
-		Find(&users).Error; err != nil {
-		logger.Error(fmt.Sprintf("failed to fetch users: %s", err.Error()))
-		return nil
-	}
-
-	// Filter out empty subscription IDs and collect user IDs
-	subscriptionIDs := make([]string, 0, len(users))
-	userIDs := make([]string, 0, len(users))
-	for _, user := range users {
-		if user.OneSignalSubscriptionID != "" {
-			subscriptionIDs = append(subscriptionIDs, user.OneSignalSubscriptionID)
-			userIDs = append(userIDs, user.ID)
-		}
-	}
-
-	if len(subscriptionIDs) == 0 {
+		logger.Info("No users to send push notification to after preference filtering")
 		return nil
 	}
 
 	req.Title = ResolvePushTitle(req, db)
 	req.Message = ResolvePushBody(req.Username, req.Message)
 
-	err := onesignal.OptionalSendBatchNotifications(logger, subscriptionIDs, req, db, userIDs)
-	if err != nil {
-		logger.Error(fmt.Sprintf("failed to send batch OneSignal notification: %s", err.Error()))
-		return nil // Non-critical error, don't fail the notification flow
+	if _, err := Dispatch(logger, db, PushDispatch{Req: req, UserIDs: userArr}); err != nil {
+		logger.Error("failed to send batch push notification: %s", err.Error())
 	}
 
 	return nil
 }
 
-// SendOneSignalNotificationToUser sends a OneSignal push notification to a specific user
-func SendOneSignalNotificationToUser(logger *utility.Logger, db *gorm.DB, userID string, req models.OneSignalPushRequest) error {
-	user := &models.User{}
-
-	subscriptionID, err := user.GetOneSignalSubscriptionID(db, userID)
-	if err != nil {
-		logger.Error(fmt.Sprintf("failed to get OneSignal subscription ID: %s", err.Error()))
-		return fmt.Errorf("failed to get OneSignal subscription ID")
-	}
-
-	if subscriptionID == "" {
-		logger.Info("User %s has no OneSignal subscription ID", userID)
-		return fmt.Errorf("user has no OneSignal subscription ID")
-	}
-
+// SendNotificationToUser sends a push notification to a specific user and fails when they have no registered device.
+func SendNotificationToUser(logger *utility.Logger, db *gorm.DB, userID string, req models.OneSignalPushRequest) error {
 	pushReq := models.PushRequest{
 		Title:     req.Title,
 		Message:   req.Message,
 		AvatarUrl: req.AvatarUrl,
 	}
 
-	err = onesignal.SendNotification(logger, subscriptionID, pushReq, db, userID)
+	reached, err := Dispatch(logger, db, PushDispatch{Req: pushReq, UserIDs: []string{userID}})
 	if err != nil {
-		logger.Error(fmt.Sprintf("failed to send OneSignal notification: %s", err.Error()))
-		return fmt.Errorf("failed to send OneSignal notification")
+		logger.Error("failed to send push notification: %s", err.Error())
+		return fmt.Errorf("failed to send push notification")
+	}
+
+	if reached == 0 {
+		return fmt.Errorf("user has no registered push device")
 	}
 
 	return nil
 }
 
-// PushOneSignalToUsersForBroadcast sends a OneSignal broadcast notification to multiple users
-// Used for admin broadcast notifications to all users
-func PushOneSignalToUsersForBroadcast(req models.PushRequest, logger *utility.Logger, db *gorm.DB, subscriptionIDs []string, userIDs []string) error {
-	if len(subscriptionIDs) == 0 {
-		logger.Info("No subscription IDs provided for broadcast notification")
-		return nil
+// PushToUsersForBroadcast sends an admin broadcast and returns how many users had a device to receive it.
+func PushToUsersForBroadcast(req models.PushRequest, logger *utility.Logger, db *gorm.DB, userIDs []string) (int, error) {
+	if len(userIDs) == 0 {
+		return 0, nil
 	}
 
-	err := onesignal.OptionalSendBatchNotifications(logger, subscriptionIDs, req, db, userIDs)
+	reached, err := Dispatch(logger, db, PushDispatch{Req: req, UserIDs: userIDs})
 	if err != nil {
-		logger.Error(fmt.Sprintf("failed to send broadcast OneSignal notification: %s", err.Error()))
-		return fmt.Errorf("failed to send broadcast notification: %w", err)
+		logger.Error("failed to send broadcast push notification: %s", err.Error())
+		return 0, fmt.Errorf("failed to send broadcast notification: %w", err)
 	}
 
-	logger.Info("Successfully sent broadcast notification to %d users", len(subscriptionIDs))
-	return nil
+	logger.Info("Successfully sent broadcast notification to %d users", reached)
+	return reached, nil
+}
+
+func isSystemMessage(req models.PushRequest) bool {
+	payloadMap, ok := req.Payload.(map[string]interface{})
+	if !ok {
+		return false
+	}
+	msgType, exists := payloadMap["type"].(string)
+	return exists && msgType == "system"
 }
 
 func ResolvePushTitle(req models.PushRequest, db *gorm.DB) string {

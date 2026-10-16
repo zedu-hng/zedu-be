@@ -123,6 +123,7 @@ type BaseConfig struct {
 	ELASTIC_API_KEY            string `mapstructure:"ELASTIC_API_KEY"`
 	ELASTIC_INDEX_PREFIX       string `mapstructure:"ELASTIC_INDEX_PREFIX"`
 	FIREBASE_SERVICE_FILE_PATH string `mapstructure:"FIREBASE_SERVICE_FILE_PATH"`
+	FIREBASE_CREDENTIALS_JSON  string `mapstructure:"FIREBASE_CREDENTIALS_JSON"`
 
 	OPENROUTER_API_KEY  string `mapstructure:"OPENROUTER_API_KEY"`
 	OPENROUTER_BASE_URL string `mapstructure:"OPENROUTER_BASE_URL"`
@@ -284,6 +285,7 @@ func (config *BaseConfig) SetupConfigurationn() *Configuration {
 		},
 		Firebase: Firebase{
 			ServiceFilePath: config.FIREBASE_SERVICE_FILE_PATH,
+			CredentialsJSON: config.FIREBASE_CREDENTIALS_JSON,
 		},
 		MongoDB: MongoDB{
 			Mongo_URI:      config.MONGO_URI,

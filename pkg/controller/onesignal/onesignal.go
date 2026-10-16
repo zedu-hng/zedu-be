@@ -44,7 +44,7 @@ func (base *Controller) SendNotification(c *gin.Context) {
 		return
 	}
 
-	err = pushService.SendOneSignalNotificationToUser(base.Logger, base.Db.Postgresql, userID.(string), req)
+	err = pushService.SendNotificationToUser(base.Logger, base.Db.Postgresql, userID.(string), req)
 	if err != nil {
 		base.Logger.Error("failed to send OneSignal notification: %v", err)
 		rd := utility.BuildErrorResponse(http.StatusInternalServerError, "error", err.Error(), err, nil)
