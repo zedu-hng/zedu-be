@@ -29,6 +29,7 @@ func TestStripeWebhook_ForgedRequestIsRejected(t *testing.T) {
 	db := storage.Connection()
 
 	orgID := CreateOrganizationWithCredit(t, db.Postgresql, 100.00)
+	transactionsBefore := countCreditTransactions(t, db, orgID)
 	packageID := CreateTestCreditPackage(t, db.Postgresql, 1000, 5.00)
 	sessionID := fmt.Sprintf("cs_test_%s", utility.GenerateUUID())
 	t.Cleanup(func() { CleanupSpecificTestData(db.Postgresql, "", []string{orgID}) })
@@ -54,9 +55,8 @@ func TestStripeWebhook_ForgedRequestIsRejected(t *testing.T) {
 
 	assert.NotEqual(t, http.StatusOK, rr.Code, "a request with a made-up signature must not be accepted")
 
-	var transactionCount int64
-	db.Postgresql.Model(&models.CreditTransaction{}).Where("organisation_id = ?", orgID).Count(&transactionCount)
-	assert.Equal(t, int64(0), transactionCount, "a forged request must not create a credit transaction")
+	// The organisation already has one starting transaction from the fixture, so compare with the count before
+	assert.Equal(t, transactionsBefore, countCreditTransactions(t, db, orgID), "a forged request must not create a credit transaction")
 
 	var org models.Organisation
 	assert.NoError(t, db.Postgresql.Where("id = ?", orgID).First(&org).Error)
