@@ -230,7 +230,6 @@ func (base *Controller) GetCurrentSubscription(c *gin.Context) {
 
 func (base *Controller) GetSubscriptions(c *gin.Context) {
 
-
 	orgID, err := middleware.GetUserClaims(c, base.Db.Postgresql, "org_id")
 	if err != nil {
 		base.Logger.Info("unable to fetch org claims")
@@ -238,7 +237,6 @@ func (base *Controller) GetSubscriptions(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, rd)
 		return
 	}
-	
 
 	subscriptionsData, code, err := service.GetSubscriptions(orgID.(string), base.Db.Postgresql)
 	if err != nil {
