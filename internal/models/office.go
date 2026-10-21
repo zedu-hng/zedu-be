@@ -69,9 +69,9 @@ type OfficeLayoutPayload struct {
 
 // Scan implements sql.Scanner for the jsonb column.
 func (p *OfficeLayoutPayload) Scan(value any) error {
-	bytes, ok := value.([]byte)
-	if !ok {
-		return fmt.Errorf("failed to unmarshal OfficeLayoutPayload: value is not []byte")
+	bytes, err := jsonBytes(value)
+	if err != nil {
+		return fmt.Errorf("failed to unmarshal OfficeLayoutPayload: %w", err)
 	}
 	if len(bytes) == 0 {
 		return nil
@@ -94,9 +94,9 @@ type OfficeAvatarConfig struct {
 
 // Scan implements sql.Scanner for the jsonb column.
 func (a *OfficeAvatarConfig) Scan(value any) error {
-	bytes, ok := value.([]byte)
-	if !ok {
-		return fmt.Errorf("failed to unmarshal OfficeAvatarConfig: value is not []byte")
+	bytes, err := jsonBytes(value)
+	if err != nil {
+		return fmt.Errorf("failed to unmarshal OfficeAvatarConfig: %w", err)
 	}
 	if len(bytes) == 0 {
 		return nil
@@ -119,9 +119,9 @@ type OfficeSettings struct {
 
 // Scan implements sql.Scanner for the jsonb column.
 func (s *OfficeSettings) Scan(value any) error {
-	bytes, ok := value.([]byte)
-	if !ok {
-		return fmt.Errorf("failed to unmarshal OfficeSettings: value is not []byte")
+	bytes, err := jsonBytes(value)
+	if err != nil {
+		return fmt.Errorf("failed to unmarshal OfficeSettings: %w", err)
 	}
 	if len(bytes) == 0 {
 		return nil
@@ -251,6 +251,21 @@ type OfficeVector struct {
 	X float64 `json:"x"`
 	Y float64 `json:"y"`
 	Z float64 `json:"z"`
+}
+
+// jsonBytes normalises the value a driver hands to a jsonb column. A nullable
+// column arrives as nil and must not fail the whole query.
+func jsonBytes(value any) ([]byte, error) {
+	switch typed := value.(type) {
+	case nil:
+		return nil, nil
+	case []byte:
+		return typed, nil
+	case string:
+		return []byte(typed), nil
+	default:
+		return nil, fmt.Errorf("value is not a json document")
+	}
 }
 
 // OfficeLayoutCommand carries everything a layout write needs. It keeps the
