@@ -13,8 +13,7 @@ import (
 	"github.com/hngprojects/telex_be/utility"
 )
 
-// Office registers the 3D office routes. It is only mounted when the
-// FF_3D_OFFICE flag is enabled, so the feature stays dark by default.
+// Office registers the 3D office routes.
 func Office(r *gin.Engine, ApiVersion string, validator *validator.Validate, db *storage.Database, logger *utility.Logger) *gin.Engine {
 	extReq := request.ExternalRequest{Logger: logger, Test: false}
 	officeController := office.Controller{Db: db, Validator: validator, Logger: logger, ExtReq: extReq}
