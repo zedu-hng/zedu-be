@@ -86,6 +86,7 @@ func Setup(logger *utility.Logger, validator *validator.Validate, db *storage.Da
 	Account(r, ApiVersion, validator, db, logger)
 	SlashCommands(r, ApiVersion, validator, db, logger)
 	Zedu(r, ApiVersion, validator, db, logger)
+	Office(r, ApiVersion, validator, db, logger)
 
 	r.GET("/", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{

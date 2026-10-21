@@ -13,6 +13,8 @@ import (
 
 	"github.com/hngprojects/telex_be/internal/config"
 	"github.com/hngprojects/telex_be/internal/models"
+	"github.com/hngprojects/telex_be/pkg/repository/storage"
+	"github.com/hngprojects/telex_be/services/office"
 	"github.com/hngprojects/telex_be/utility"
 )
 
@@ -38,16 +40,23 @@ func GetConnToken(userId string, db *gorm.DB) (gin.H, int, error) {
 
 }
 
-func GetSubToken(userId string, req models.ChannelSubTokenReq, db *gorm.DB) (gin.H, int, error) {
+// SubTokenParams carries the identity behind a subscription token request.
+type SubTokenParams struct {
+	UserID  string
+	OrgID   string
+	Request models.ChannelSubTokenReq
+}
 
+func GetSubToken(params SubTokenParams, db *gorm.DB) (gin.H, int, error) {
 	var (
-		channelName = req.Channel
+		channelName = params.Request.Channel
 		org         = models.Organisation{}
-		orgId       string
+		orgId       = params.OrgID
 		cUserId     string
+		userId      = params.UserID
 	)
 
-	parts := strings.Split(req.Channel, "/")
+	parts := strings.Split(params.Request.Channel, "/")
 	if len(parts) == 2 {
 		orgId = parts[0]
 		cUserId = parts[1]
@@ -59,6 +68,26 @@ func GetSubToken(userId string, req models.ChannelSubTokenReq, db *gorm.DB) (gin
 		exist, _ := org.CheckUserIsMemberOfOrg(userId, orgId, db)
 
 		if !exist || cUserId != userId {
+			return gin.H{}, http.StatusBadRequest, errors.New("invalid channel subscription")
+		}
+
+	} else if office.IsOfficeChannel(channelName) {
+		roomID, _, ok := office.ParseOfficeChannel(channelName)
+		if !ok {
+			return gin.H{}, http.StatusBadRequest, errors.New("invalid office channel")
+		}
+
+		ref, err := office.ParseRoomID(roomID)
+		if err != nil {
+			return gin.H{}, http.StatusBadRequest, err
+		}
+
+		officeService := office.New(&storage.Database{Postgresql: db}, nil)
+		access, err := officeService.CanAccess(orgId, userId, ref)
+		if err != nil {
+			return gin.H{}, http.StatusBadRequest, err
+		}
+		if !access.CanEnter {
 			return gin.H{}, http.StatusBadRequest, errors.New("invalid channel subscription")
 		}
 

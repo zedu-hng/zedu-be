@@ -50,6 +50,9 @@ type Profile struct {
 	Online            bool           `gorm:"type:boolean;default:true" json:"online"`
 	IsActive          bool           `gorm:"type:boolean;default:true" json:"is_active"`
 	IsDeactivated     bool           `gorm:"column:is_deactivated;type:boolean;default:false" json:"is_deactivated"`
+	// AvatarConfig holds the 3D office avatar for this profile. It is hidden
+	// from the standard profile payload; the office API exposes it separately.
+	AvatarConfig OfficeAvatarConfig `gorm:"column:avatar_config;type:jsonb;null" json:"-"`
 }
 
 type ProfileSummary struct {
