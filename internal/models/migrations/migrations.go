@@ -102,8 +102,6 @@ func AuthMigrationModels() []any {
 		models.AccountDeletionRequest{},
 		models.ZeduResourcePage{},
 		models.ZeduGuide{},
-		models.OfficeLayout{},
-		models.OfficeRoomConfig{},
 	} // an array of db models, example: User{}
 }
 

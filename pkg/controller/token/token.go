@@ -75,9 +75,8 @@ func (base *Controller) GetSubToken(c *gin.Context) {
 	userClaims := claims.(jwt.MapClaims)
 
 	userId := userClaims["user_id"].(string)
-	orgId, _ := userClaims["org_id"].(string)
 
-	respData, code, err := token.GetSubToken(token.SubTokenParams{UserID: userId, OrgID: orgId, Request: req}, base.Db.Postgresql)
+	respData, code, err := token.GetSubToken(userId, req, base.Db.Postgresql)
 	if err != nil {
 		base.Logger.Error("An error occured while getting subscription token, error: %v", err)
 		rd := utility.BuildErrorResponse(http.StatusBadRequest, fmt.Sprintf("an error occured: %v", err.Error()), err.Error(), err, nil)
@@ -198,7 +197,7 @@ func (base *Controller) GetSubTokenUnAuth(c *gin.Context) {
 		return
 	}
 
-	respData, code, err := token.GetSubToken(token.SubTokenParams{UserID: accessToken.OwnerID, Request: req}, base.Db.Postgresql)
+	respData, code, err := token.GetSubToken(accessToken.OwnerID, req, base.Db.Postgresql)
 	if err != nil {
 		rd := utility.BuildErrorResponse(http.StatusBadRequest, "error", err.Error(), err, nil)
 		c.JSON(http.StatusBadRequest, rd)
