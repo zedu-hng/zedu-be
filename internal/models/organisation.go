@@ -49,6 +49,10 @@ type Organisation struct {
 	OrganisationSlug    string           `gorm:"-" json:"organisation_slug"`
 	CurrentUserRoleInfo OrgUserRoleInfo  `gorm:"-" json:"user_role,omitempty"`
 	InviteLinkStatus    string           `gorm:"-" json:"invite_link_status,omitempty"`
+	// OfficeSettings holds the 3D office options for this organisation. It is
+	// hidden from the standard organisation payload; the office API exposes it
+	// through its own DTO.
+	OfficeSettings OfficeSettings `gorm:"column:office_settings;type:jsonb;null" json:"-"`
 }
 
 type CreateOrgRequestModel struct {
