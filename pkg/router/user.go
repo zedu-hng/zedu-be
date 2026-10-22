@@ -46,6 +46,8 @@ func User(r *gin.Engine, ApiVersion string, validator *validator.Validate, db *s
 		userUrl.GET("/users/:user_id/organisations/:org_id/roles", user.GetUserRoleInOrganisation)
 		userUrl.PUT("/users/onesignal-subscription-id", user.UpdateOneSignalSubscriptionID)
 		userUrl.PUT("/users/voip-push-token", user.UpdateVoIPToken)
+		userUrl.POST("/users/push-devices", user.RegisterPushDevice)
+		userUrl.DELETE("/users/push-devices", user.UnregisterPushDevice)
 		userUrl.GET("/users/onesignal-notifications", user.GetUserOneSignalNotifications)
 		userUrl.PUT("/users/onesignal-notifications/:notification_id/read", user.MarkOneSignalNotificationAsRead)
 		userUrl.GET("/users/me", auth.FetchUser)

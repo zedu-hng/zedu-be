@@ -19719,6 +19719,84 @@ paths:
               schema:
                 $ref: "#/components/schemas/ServerErrorSchema"
 
+  /users/push-devices:
+    post:
+      tags:
+        - user
+      summary: Register an Android device for push notifications
+      description: >
+        Stores the device's Firebase Cloud Messaging registration token. A user can have several devices;
+        a token is reassigned to whichever account registers it last. Registering an Android device also
+        clears the user's legacy OneSignal subscription so the phone does not receive duplicate pushes.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token, platform]
+              properties:
+                token:
+                  type: string
+                  description: FCM registration token
+                platform:
+                  type: string
+                  enum: [android]
+      responses:
+        "200":
+          description: Push device registered successfully
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BadRequestErrorSchema"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UnauthorizedErrorSchema"
+        "422":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UnprocessedEntityErrorSchema"
+    delete:
+      tags:
+        - user
+      summary: Unregister a push device
+      description: Removes the FCM token from the authenticated user, typically on logout.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token:
+                  type: string
+      responses:
+        "200":
+          description: Push device unregistered successfully
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UnauthorizedErrorSchema"
+        "422":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UnprocessedEntityErrorSchema"
   /users/voip-push-token:
     put:
       tags:
