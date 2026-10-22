@@ -2,10 +2,20 @@ name: Lead approval
 
 # Caller: the logic lives in zedu-hng/zedu-ci (lead-approval.yml), pinned by commit. Keep the file name:
 # other workflows look it up.
-# The gate is switched off (`enforce_lead_approval: false`) and automatic runs are disabled, so it no
-# longer fires on PRs, reviews or the 5-minute sweep. Dispatch it manually to re-check a PR.
+# The gate is switched off (`enforce_lead_approval: false`). One automatic run per head posts the
+# "Lead approved" success that the reviewer queue waits for; the 5-minute sweep and label/review
+# triggers are disabled. Dispatch it manually to re-check a PR.
 
 on:
+  pull_request_target:
+    branches:
+      - dev
+      - central-staging
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
   workflow_dispatch:
     inputs:
       pr:
@@ -18,7 +28,7 @@ on:
 permissions: {}
 
 concurrency:
-  group: lead-approval-${{ inputs.pr || github.run_id }}
+  group: lead-approval-${{ github.event.pull_request.number || inputs.pr || github.run_id }}
   cancel-in-progress: true
 
 jobs:
