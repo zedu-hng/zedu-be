@@ -44,3 +44,4 @@ jobs:
     uses: zedu-hng/zedu-ci/.github/workflows/reviewer-notify.yml@8e31deaa857e62ed4bac364dfe8457eaaafd93f0
     with:
       build_context: Build
+      cap: "3"
