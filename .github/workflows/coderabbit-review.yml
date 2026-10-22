@@ -38,6 +38,6 @@ jobs:
       contents: read
       pull-requests: write
       issues: write
-    uses: zedu-hng/zedu-ci/.github/workflows/coderabbit-review.yml@4297c173ea786856c6450eed253ac31749843f68
+    uses: zedu-hng/zedu-ci/.github/workflows/coderabbit-review.yml@313bf7fd07861afc5637d7e83f32d35635a6a13a
     with:
       pr: ${{ github.event.pull_request.number || inputs.pr || 0 }}
