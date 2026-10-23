@@ -124,9 +124,14 @@ route answers `403 office_disabled`.
 ### Realtime channels
 
 ```
-office:org:{orgId}:floor:{floorIndex}:room:{encodedRoomId}:presence
-office:org:{orgId}:floor:{floorIndex}:room:{encodedRoomId}:layout
+office_org_{orgId}_floor_{n}_room_{base64url(roomId)}_presence
+office_org_{orgId}_floor_{n}_room_{base64url(roomId)}_layout
 ```
+
+Colons are forbidden in office channel names: Centrifugo resolves the
+namespace before the first `:`, and an undeclared namespace fails subscription
+with `102: unknown channel`. The colon-free default-namespace format works
+without any Centrifugo namespace configuration.
 
 The organisation is part of the channel name on purpose: the lobby and the
 focus pods exist in every organisation, so a name without it would carry one

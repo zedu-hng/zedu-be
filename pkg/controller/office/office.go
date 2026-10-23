@@ -2,6 +2,7 @@ package office
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -60,6 +61,16 @@ func (base *Controller) service() *service.Service {
 	return service.New(base.Db, base.Logger)
 }
 
+// fail logs the real error and returns a 500 JSON response. Because
+// log.json has console.enable: false, errors land in a file inside the
+// container and Coolify shows nothing, so we also mirror to stdout.
+func (base *Controller) fail(c *gin.Context, message string, err error) {
+	base.Logger.Error("%s: %v", message, err)
+	fmt.Printf("ERROR: %s: %v\n", message, err)
+	rd := utility.BuildErrorResponse(http.StatusInternalServerError, "error", message, err, nil)
+	c.JSON(http.StatusInternalServerError, rd)
+}
+
 // authorise resolves the requester and answers 403 when the organisation has
 // The Office switched off. Every office route except the status goes through
 // it, so a disabled organisation keeps no door open.
@@ -73,8 +84,7 @@ func (base *Controller) authorise(c *gin.Context) (identity, bool) {
 
 	enabled, err := base.service().IsEnabled(requester.OrgID)
 	if err != nil {
-		rd := utility.BuildErrorResponse(http.StatusInternalServerError, "error", "failed to read the office settings", err, nil)
-		c.JSON(http.StatusInternalServerError, rd)
+		base.fail(c, "failed to read the office settings", err)
 		return identity{}, false
 	}
 
@@ -100,8 +110,7 @@ func (base *Controller) Status(c *gin.Context) {
 
 	enabled, err := base.service().IsEnabled(requester.OrgID)
 	if err != nil {
-		rd := utility.BuildErrorResponse(http.StatusInternalServerError, "error", "failed to read the office settings", err, nil)
-		c.JSON(http.StatusInternalServerError, rd)
+		base.fail(c, "failed to read the office settings", err)
 		return
 	}
 
@@ -121,8 +130,7 @@ func (base *Controller) GetSettings(c *gin.Context) {
 
 	settings, err := base.service().Settings(requester.OrgID)
 	if err != nil {
-		rd := utility.BuildErrorResponse(http.StatusInternalServerError, "error", "failed to load the office settings", err, nil)
-		c.JSON(http.StatusInternalServerError, rd)
+		base.fail(c, "failed to load the office settings", err)
 		return
 	}
 
@@ -162,16 +170,14 @@ func (base *Controller) UpdateSettings(c *gin.Context) {
 
 	settings, err := office.Settings(requester.OrgID)
 	if err != nil {
-		rd := utility.BuildErrorResponse(http.StatusInternalServerError, "error", "failed to load the office settings", err, nil)
-		c.JSON(http.StatusInternalServerError, rd)
+		base.fail(c, "failed to load the office settings", err)
 		return
 	}
 
 	settings.Enabled = *request.Enabled
 
 	if err := office.UpdateSettings(requester.OrgID, settings); err != nil {
-		rd := utility.BuildErrorResponse(http.StatusInternalServerError, "error", "failed to save the office settings", err, nil)
-		c.JSON(http.StatusInternalServerError, rd)
+		base.fail(c, "failed to save the office settings", err)
 		return
 	}
 
@@ -193,31 +199,27 @@ func (base *Controller) Bootstrap(c *gin.Context) {
 	// Fetch access sets once (3 queries) instead of per-member CanAccess calls
 	sets, err := office.AccessSets(requester.OrgID, requester.UserID)
 	if err != nil {
-		rd := utility.BuildErrorResponse(http.StatusInternalServerError, "error", "failed to load access sets", err, nil)
-		c.JSON(http.StatusInternalServerError, rd)
+		base.fail(c, "failed to load access sets", err)
 		return
 	}
 
 	directory, err := office.BuildDirectory(requester.OrgID, requester.UserID, sets)
 	if err != nil {
-		rd := utility.BuildErrorResponse(http.StatusInternalServerError, "error", "failed to build the office directory", err, nil)
-		c.JSON(http.StatusInternalServerError, rd)
+		base.fail(c, "failed to build the office directory", err)
 		return
 	}
 
 	org := models.Organisation{}
 	organisation, err := org.GetOrgByID(base.Db.Postgresql, requester.OrgID)
 	if err != nil {
-		rd := utility.BuildErrorResponse(http.StatusInternalServerError, "error", "failed to load the organisation", err, nil)
-		c.JSON(http.StatusInternalServerError, rd)
+		base.fail(c, "failed to load the organisation", err)
 		return
 	}
 
 	settings := organisation.OfficeSettings
 	enabled, err := office.IsEnabled(requester.OrgID)
 	if err != nil {
-		rd := utility.BuildErrorResponse(http.StatusInternalServerError, "error", "failed to read the office settings", err, nil)
-		c.JSON(http.StatusInternalServerError, rd)
+		base.fail(c, "failed to read the office settings", err)
 		return
 	}
 	settings.Enabled = enabled
@@ -226,8 +228,7 @@ func (base *Controller) Bootstrap(c *gin.Context) {
 	layouts := map[string]models.OfficeLayoutResponse{}
 	publishedLayouts, err := office.GetAllPublishedLayouts(requester.OrgID)
 	if err != nil {
-		rd := utility.BuildErrorResponse(http.StatusInternalServerError, "error", "failed to load layouts", err, nil)
-		c.JSON(http.StatusInternalServerError, rd)
+		base.fail(c, "failed to load layouts", err)
 		return
 	}
 	for _, layout := range publishedLayouts {
@@ -278,8 +279,7 @@ func (base *Controller) GetRoom(c *gin.Context) {
 
 	access, err := office.CanAccess(requester.OrgID, requester.UserID, ref)
 	if err != nil {
-		rd := utility.BuildErrorResponse(http.StatusInternalServerError, "error", "failed to check room access", err, nil)
-		c.JSON(http.StatusInternalServerError, rd)
+		base.fail(c, "failed to check room access", err)
 		return
 	}
 	if !access.CanEnter {
@@ -291,15 +291,13 @@ func (base *Controller) GetRoom(c *gin.Context) {
 	// Fetch access sets for the room lookup
 	sets, err := office.AccessSets(requester.OrgID, requester.UserID)
 	if err != nil {
-		rd := utility.BuildErrorResponse(http.StatusInternalServerError, "error", "failed to load access sets", err, nil)
-		c.JSON(http.StatusInternalServerError, rd)
+		base.fail(c, "failed to load access sets", err)
 		return
 	}
 
 	room, err := office.GetRoom(requester.OrgID, requester.UserID, sets, ref)
 	if err != nil {
-		rd := utility.BuildErrorResponse(http.StatusInternalServerError, "error", "failed to load the room", err, nil)
-		c.JSON(http.StatusInternalServerError, rd)
+		base.fail(c, "failed to load the room", err)
 		return
 	}
 	if room == nil {
@@ -330,8 +328,7 @@ func (base *Controller) GetLayout(c *gin.Context) {
 
 	access, err := office.CanAccess(requester.OrgID, requester.UserID, ref)
 	if err != nil {
-		rd := utility.BuildErrorResponse(http.StatusInternalServerError, "error", "failed to check room access", err, nil)
-		c.JSON(http.StatusInternalServerError, rd)
+		base.fail(c, "failed to check room access", err)
 		return
 	}
 	if !access.CanEnter {
@@ -342,16 +339,14 @@ func (base *Controller) GetLayout(c *gin.Context) {
 
 	layout, err := office.GetPublishedLayout(requester.OrgID, ref)
 	if err != nil {
-		rd := utility.BuildErrorResponse(http.StatusInternalServerError, "error", "failed to load the room layout", err, nil)
-		c.JSON(http.StatusInternalServerError, rd)
+		base.fail(c, "failed to load the room layout", err)
 		return
 	}
 
 	if layout == nil && ref.Kind == models.OfficeRoomKindPersonal && ref.Ref == requester.UserID {
 		layout, err = office.GetPersonalLayout(requester.OrgID, requester.UserID)
 		if err != nil {
-			rd := utility.BuildErrorResponse(http.StatusInternalServerError, "error", "failed to load the room layout", err, nil)
-			c.JSON(http.StatusInternalServerError, rd)
+			base.fail(c, "failed to load the room layout", err)
 			return
 		}
 	}
@@ -390,8 +385,7 @@ func (base *Controller) GetDraft(c *gin.Context) {
 
 	access, err := office.CanAccess(requester.OrgID, requester.UserID, ref)
 	if err != nil {
-		rd := utility.BuildErrorResponse(http.StatusInternalServerError, "error", "failed to check room access", err, nil)
-		c.JSON(http.StatusInternalServerError, rd)
+		base.fail(c, "failed to check room access", err)
 		return
 	}
 	if !access.CanEditFurniture {
@@ -402,8 +396,7 @@ func (base *Controller) GetDraft(c *gin.Context) {
 
 	draft, err := office.GetDraft(requester.OrgID, ref, requester.UserID)
 	if err != nil {
-		rd := utility.BuildErrorResponse(http.StatusInternalServerError, "error", "failed to load the room draft", err, nil)
-		c.JSON(http.StatusInternalServerError, rd)
+		base.fail(c, "failed to load the room draft", err)
 		return
 	}
 
@@ -438,8 +431,7 @@ func (base *Controller) SaveDraft(c *gin.Context) {
 
 	access, err := office.CanAccess(requester.OrgID, requester.UserID, ref)
 	if err != nil {
-		rd := utility.BuildErrorResponse(http.StatusInternalServerError, "error", "failed to check room access", err, nil)
-		c.JSON(http.StatusInternalServerError, rd)
+		base.fail(c, "failed to check room access", err)
 		return
 	}
 	if !access.CanEditFurniture {
@@ -467,8 +459,7 @@ func (base *Controller) SaveDraft(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, rd)
 			return
 		}
-		rd := utility.BuildErrorResponse(http.StatusInternalServerError, "error", "failed to save the room draft", err, nil)
-		c.JSON(http.StatusInternalServerError, rd)
+		base.fail(c, "failed to save the room draft", err)
 		return
 	}
 
@@ -494,8 +485,7 @@ func (base *Controller) PublishLayout(c *gin.Context) {
 
 	access, err := office.CanAccess(requester.OrgID, requester.UserID, ref)
 	if err != nil {
-		rd := utility.BuildErrorResponse(http.StatusInternalServerError, "error", "failed to check room access", err, nil)
-		c.JSON(http.StatusInternalServerError, rd)
+		base.fail(c, "failed to check room access", err)
 		return
 	}
 	if !access.CanPublish {
@@ -525,8 +515,7 @@ func (base *Controller) PublishLayout(c *gin.Context) {
 			c.JSON(http.StatusConflict, rd)
 			return
 		}
-		rd := utility.BuildErrorResponse(http.StatusInternalServerError, "error", "failed to publish the layout", err, nil)
-		c.JSON(http.StatusInternalServerError, rd)
+		base.fail(c, "failed to publish the layout", err)
 		return
 	}
 
@@ -554,8 +543,7 @@ func (base *Controller) ResetLayout(c *gin.Context) {
 
 	access, err := office.CanAccess(requester.OrgID, requester.UserID, ref)
 	if err != nil {
-		rd := utility.BuildErrorResponse(http.StatusInternalServerError, "error", "failed to check room access", err, nil)
-		c.JSON(http.StatusInternalServerError, rd)
+		base.fail(c, "failed to check room access", err)
 		return
 	}
 	if !access.CanReset {
@@ -566,8 +554,7 @@ func (base *Controller) ResetLayout(c *gin.Context) {
 
 	layout, err := office.Reset(requester.OrgID, ref, requester.UserID)
 	if err != nil {
-		rd := utility.BuildErrorResponse(http.StatusInternalServerError, "error", "failed to reset the room", err, nil)
-		c.JSON(http.StatusInternalServerError, rd)
+		base.fail(c, "failed to reset the room", err)
 		return
 	}
 
@@ -622,8 +609,7 @@ func (base *Controller) SavePersonalLayout(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, rd)
 			return
 		}
-		rd := utility.BuildErrorResponse(http.StatusInternalServerError, "error", "failed to save your office", err, nil)
-		c.JSON(http.StatusInternalServerError, rd)
+		base.fail(c, "failed to save your office", err)
 		return
 	}
 
@@ -649,8 +635,7 @@ func (base *Controller) Occupants(c *gin.Context) {
 
 	access, err := office.CanAccess(requester.OrgID, requester.UserID, ref)
 	if err != nil {
-		rd := utility.BuildErrorResponse(http.StatusInternalServerError, "error", "failed to check room access", err, nil)
-		c.JSON(http.StatusInternalServerError, rd)
+		base.fail(c, "failed to check room access", err)
 		return
 	}
 	if !access.CanEnter {
@@ -661,8 +646,7 @@ func (base *Controller) Occupants(c *gin.Context) {
 
 	occupants, err := office.Occupants(requester.OrgID, ref)
 	if err != nil {
-		rd := utility.BuildErrorResponse(http.StatusInternalServerError, "error", "failed to load the room occupants", err, nil)
-		c.JSON(http.StatusInternalServerError, rd)
+		base.fail(c, "failed to load the room occupants", err)
 		return
 	}
 
@@ -689,8 +673,7 @@ func (base *Controller) EnterRoom(c *gin.Context) {
 
 	access, err := office.CanAccess(requester.OrgID, requester.UserID, ref)
 	if err != nil {
-		rd := utility.BuildErrorResponse(http.StatusInternalServerError, "error", "failed to check room access", err, nil)
-		c.JSON(http.StatusInternalServerError, rd)
+		base.fail(c, "failed to check room access", err)
 		return
 	}
 	if !access.CanEnter {
@@ -705,8 +688,7 @@ func (base *Controller) EnterRoom(c *gin.Context) {
 	// holds a handful. The room is full once the people inside reach it.
 	occupants, err := office.Occupants(requester.OrgID, ref)
 	if err != nil {
-		rd := utility.BuildErrorResponse(http.StatusInternalServerError, "error", "failed to load the room occupants", err, nil)
-		c.JSON(http.StatusInternalServerError, rd)
+		base.fail(c, "failed to load the room occupants", err)
 		return
 	}
 
@@ -725,8 +707,7 @@ func (base *Controller) EnterRoom(c *gin.Context) {
 
 	avatar, err := office.GetAvatar(requester.UserID)
 	if err != nil {
-		rd := utility.BuildErrorResponse(http.StatusInternalServerError, "error", "failed to load your avatar", err, nil)
-		c.JSON(http.StatusInternalServerError, rd)
+		base.fail(c, "failed to load your avatar", err)
 		return
 	}
 
@@ -745,8 +726,7 @@ func (base *Controller) EnterRoom(c *gin.Context) {
 		UserID:         requester.UserID,
 		Presence:       presence,
 	}); err != nil {
-		rd := utility.BuildErrorResponse(http.StatusInternalServerError, "error", "failed to enter the room", err, nil)
-		c.JSON(http.StatusInternalServerError, rd)
+		base.fail(c, "failed to enter the room", err)
 		return
 	}
 
@@ -783,8 +763,7 @@ func (base *Controller) LeaveRoom(c *gin.Context) {
 
 	access, err := office.CanAccess(requester.OrgID, requester.UserID, ref)
 	if err != nil {
-		rd := utility.BuildErrorResponse(http.StatusInternalServerError, "error", "failed to check room access", err, nil)
-		c.JSON(http.StatusInternalServerError, rd)
+		base.fail(c, "failed to check room access", err)
 		return
 	}
 	if !access.CanEnter {
@@ -794,8 +773,7 @@ func (base *Controller) LeaveRoom(c *gin.Context) {
 	}
 
 	if err := office.LeaveRoom(requester.OrgID, requester.UserID, ref); err != nil {
-		rd := utility.BuildErrorResponse(http.StatusInternalServerError, "error", "failed to leave the room", err, nil)
-		c.JSON(http.StatusInternalServerError, rd)
+		base.fail(c, "failed to leave the room", err)
 		return
 	}
 
@@ -814,8 +792,7 @@ func (base *Controller) GetAvatar(c *gin.Context) {
 
 	avatar, err := base.service().GetAvatar(requester.UserID)
 	if err != nil {
-		rd := utility.BuildErrorResponse(http.StatusInternalServerError, "error", "failed to load your avatar", err, nil)
-		c.JSON(http.StatusInternalServerError, rd)
+		base.fail(c, "failed to load your avatar", err)
 		return
 	}
 
@@ -845,11 +822,12 @@ func (base *Controller) SaveAvatar(c *gin.Context) {
 	}
 
 	if err := base.service().SaveAvatar(requester.UserID, avatar); err != nil {
-		rd := utility.BuildErrorResponse(http.StatusInternalServerError, "error", "failed to save your avatar", err, nil)
-		c.JSON(http.StatusInternalServerError, rd)
+		base.fail(c, "failed to save your avatar", err)
 		return
 	}
 
 	rd := utility.BuildSuccessResponse(http.StatusOK, "avatar saved", avatar)
 	c.JSON(http.StatusOK, rd)
 }
+
+

@@ -1,8 +1,8 @@
 package office
 
 import (
+	"encoding/base64"
 	"fmt"
-	"net/url"
 	"strconv"
 	"strings"
 
@@ -19,9 +19,9 @@ import (
 // lobby or focus pod 1 exist in every organisation, so a name without the
 // organisation would carry one organisation's presence to another's.
 const (
-	OfficeChannelPrefix   = "office:org:"
-	PresenceChannelSuffix = ":presence"
-	LayoutChannelSuffix   = ":layout"
+	OfficeChannelPrefix   = "office_org_"
+	PresenceChannelSuffix = "_presence"
+	LayoutChannelSuffix   = "_layout"
 )
 
 // OfficeChannelTarget names the room a realtime message belongs to.
@@ -60,12 +60,13 @@ func LayoutChannelName(target OfficeChannelTarget) string {
 }
 
 func officeChannelName(target OfficeChannelTarget, suffix string) string {
+	encoded := base64.URLEncoding.WithPadding(base64.NoPadding).EncodeToString([]byte(target.RoomID))
 	return fmt.Sprintf(
-		"%s%s:floor:%d:room:%s%s",
+		"%s%s_floor_%d_room_%s%s",
 		OfficeChannelPrefix,
 		target.OrgID,
 		target.FloorIndex,
-		url.QueryEscape(target.RoomID),
+		encoded,
 		suffix,
 	)
 }
@@ -95,28 +96,41 @@ func ParseOfficeChannel(channel string) (OfficeChannel, bool) {
 		return OfficeChannel{}, false
 	}
 
-	parts := strings.Split(trimmed, ":")
-	if len(parts) != 5 {
+	// trimmed is now: {orgId}_floor_{n}_room_{base64url(roomId)}
+	floorMarker := "_floor_"
+	roomMarker := "_room_"
+
+	floorIdx := strings.Index(trimmed, floorMarker)
+	if floorIdx < 0 {
 		return OfficeChannel{}, false
 	}
-	if parts[0] == "" || parts[1] != "floor" || parts[3] != "room" {
+	orgID := trimmed[:floorIdx]
+	if orgID == "" {
 		return OfficeChannel{}, false
 	}
 
-	floorIndex, err := strconv.Atoi(parts[2])
+	rest := trimmed[floorIdx+len(floorMarker):]
+	roomIdx := strings.Index(rest, roomMarker)
+	if roomIdx < 0 {
+		return OfficeChannel{}, false
+	}
+	floorStr := rest[:roomIdx]
+
+	floorIndex, err := strconv.Atoi(floorStr)
 	if err != nil || floorIndex < 0 {
 		return OfficeChannel{}, false
 	}
 
-	roomID, err := url.QueryUnescape(parts[4])
+	roomB64 := rest[roomIdx+len(roomMarker):]
+	roomIDBytes, err := base64.URLEncoding.WithPadding(base64.NoPadding).DecodeString(roomB64)
 	if err != nil {
 		return OfficeChannel{}, false
 	}
 
 	return OfficeChannel{
-		OrgID:      parts[0],
+		OrgID:      orgID,
 		FloorIndex: floorIndex,
-		RoomID:     roomID,
+		RoomID:     string(roomIDBytes),
 		Stream:     stream,
 	}, true
 }

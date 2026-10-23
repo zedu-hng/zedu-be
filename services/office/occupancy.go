@@ -36,7 +36,12 @@ func (s *Service) JoinRoom(command models.OfficePresenceCommand) error {
 	}
 
 	target := NewChannelTarget(command.OrganisationID, command.Room)
-	return s.PublishPresence(target, presence, "join")
+	if err := s.PublishPresence(target, presence, "join"); err != nil {
+		// Publish is an announcement; Redis is the source of truth. A
+		// Centrifugo hiccup must not 500 a room entry.
+		s.Logger.Error("failed to publish join to %s: %v", PresenceChannelName(target), err)
+	}
+	return nil
 }
 
 // LeaveRoom removes a user from a room and announces it.
@@ -56,7 +61,12 @@ func (s *Service) LeaveRoom(orgID, userID string, ref models.OfficeRoomRef) erro
 		RoomID: roomID,
 	}
 	target := NewChannelTarget(orgID, ref)
-	return s.PublishPresence(target, presence, "leave")
+	if err := s.PublishPresence(target, presence, "leave"); err != nil {
+		// Publish is an announcement; Redis is the source of truth. A
+		// Centrifugo hiccup must not 500 a room leave.
+		s.Logger.Error("failed to publish leave to %s: %v", PresenceChannelName(target), err)
+	}
+	return nil
 }
 
 // Occupants returns the people currently standing in a room.

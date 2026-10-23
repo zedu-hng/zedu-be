@@ -1,6 +1,7 @@
 package test_office
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/hngprojects/telex_be/internal/models"
@@ -15,7 +16,7 @@ func TestPresenceChannelName(t *testing.T) {
 	}
 
 	got := office.PresenceChannelName(target)
-	want := "office:org:org_1:floor:0:room:channel%3Ach_1:presence"
+	want := "office_org_org_1_floor_0_room_Y2hhbm5lbDpjaF8x_presence"
 	if got != want {
 		t.Fatalf("got %q, want %q", got, want)
 	}
@@ -29,7 +30,7 @@ func TestLayoutChannelName(t *testing.T) {
 	}
 
 	got := office.LayoutChannelName(target)
-	want := "office:org:org_1:floor:1:room:personal%3Ausr_2:layout"
+	want := "office_org_org_1_floor_1_room_cGVyc29uYWw6dXNyXzI_layout"
 	if got != want {
 		t.Fatalf("got %q, want %q", got, want)
 	}
@@ -108,7 +109,7 @@ func TestParseOfficeChannel(t *testing.T) {
 }
 
 func TestParseOfficeChannelRejectsUnknownStreams(t *testing.T) {
-	if _, ok := office.ParseOfficeChannel("office:org:org_1:floor:0:room:channel%3Ach_1:chat"); ok {
+	if _, ok := office.ParseOfficeChannel("office_org_org_1_floor_0_room_Y2hhbm5lbDpjaF8x_chat"); ok {
 		t.Fatal("unknown streams must be rejected")
 	}
 	if _, ok := office.ParseOfficeChannel("not-an-office-channel"); ok {
@@ -118,12 +119,30 @@ func TestParseOfficeChannelRejectsUnknownStreams(t *testing.T) {
 
 func TestParseOfficeChannelRejectsForeignShapes(t *testing.T) {
 	for _, channel := range []string{
-		"office:org:org_1:room:channel%3Ach_1:presence",
-		"office:org:org_1:floor:x:room:channel%3Ach_1:presence",
-		"office:org::floor:0:room:channel%3Ach_1:presence",
+		"office_org_org_1_room_Y2hhbm5lbDpjaF8x_presence",
+		"office_org_org_1_floor_x_room_Y2hhbm5lbDpjaF8x_presence",
+		"office_org__floor_0_room_Y2hhbm5lbDpjaF8x_presence",
 	} {
 		if _, ok := office.ParseOfficeChannel(channel); ok {
 			t.Fatalf("%q must be rejected", channel)
+		}
+	}
+}
+
+func TestChannelNameContainsNoColon(t *testing.T) {
+	// Colons are forbidden in office channel names: Centrifugo resolves the
+	// namespace before the first `:`, and an undeclared namespace fails with
+	// `102: unknown channel`. This pins the colon-free format against regression.
+	targets := []office.OfficeChannelTarget{
+		{OrgID: "org_1", FloorIndex: models.OfficeFloorGeneral, RoomID: "channel:ch_1"},
+		{OrgID: "org_2", FloorIndex: models.OfficeFloorMember, RoomID: "personal:usr_2"},
+		{OrgID: "org_3", FloorIndex: models.OfficeFloorGeneral, RoomID: "lobby"},
+	}
+	for _, target := range targets {
+		for _, name := range []string{office.PresenceChannelName(target), office.LayoutChannelName(target)} {
+			if strings.Contains(name, ":") {
+				t.Fatalf("channel %q contains a colon, which Centrifugo treats as a namespace separator", name)
+			}
 		}
 	}
 }
