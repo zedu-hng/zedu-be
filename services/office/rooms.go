@@ -27,6 +27,7 @@ type Directory struct {
 	Rooms          []models.OfficeRoomResponse
 	ChannelRoomMap map[string]string
 	DMOfficeMap    map[string]string
+	Floors         map[string]int
 }
 
 // defaultBounds returns the derived footprint for a room. Channel and personal
@@ -55,8 +56,20 @@ func defaultBounds(kind, ref string, index int) models.OfficeBounds {
 			H: 8,
 		}
 	case models.OfficeRoomKindPersonal:
-		// Personal offices sit in a column on the private wing.
-		return models.OfficeBounds{X: 46, Y: 3 + float64(index)*8, W: 6, H: 7}
+		// Two tiers of twenty walled offices per member floor, so forty
+		// offices fit along half a corridor length.
+		slot := index % models.OfficeFloorCapacity
+		tier := slot / 20
+		column := slot % 20
+		return models.OfficeBounds{
+			X: 2 + float64(column)*2.6,
+			Y: 2 + float64(tier)*5.2,
+			W: 2.4,
+			H: 4.6,
+		}
+	case models.OfficeRoomKindArea:
+		// The extras sit in a row past the desks on the same floor.
+		return models.OfficeBounds{X: 2 + float64(index)*8, Y: 56, W: 7, H: 6}
 	default:
 		return models.OfficeBounds{X: 0, Y: 0, W: 4, H: 4}
 	}
@@ -76,6 +89,8 @@ func defaultCapacity(kind string) int {
 		return 1
 	case models.OfficeRoomKindPersonal:
 		return 4
+	case models.OfficeRoomKindArea:
+		return 12
 	default:
 		return 8
 	}
@@ -97,6 +112,12 @@ func (s *Service) BuildDirectory(orgID, userID string, sets AccessSets) (*Direct
 	if err != nil {
 		return nil, err
 	}
+
+	floors, err := s.SyncFloorAssignments(orgID)
+	if err != nil {
+		return nil, err
+	}
+	directory.Floors = floors
 
 	appendRoom := func(kind, ref, name string, index int, locked bool) {
 		bounds := defaultBounds(kind, ref, index)
@@ -166,7 +187,25 @@ func (s *Service) BuildDirectory(orgID, userID string, sets AccessSets) (*Direct
 		if !access.CanEnter {
 			continue
 		}
+		// The slot comes from the full member list so the wing looks the same
+		// for everybody, but the floor comes from the tower assignment.
+		before := len(directory.Rooms)
 		appendRoom(models.OfficeRoomKindPersonal, member.UserID, member.DisplayName, index, false)
+		if len(directory.Rooms) > before {
+			directory.Rooms[len(directory.Rooms)-1].FloorIndex = memberFloor(floors, member.UserID)
+		}
+	}
+
+	// Every member floor carries its extras. They are rooms in their own right
+	// so presence and access follow them, and nobody is allocated a desk there.
+	for floor := models.OfficeFloorMember; floor <= highestFloor(floors); floor++ {
+		for index, area := range AreaRoomsForFloor(floor) {
+			_, key, ok := ParseAreaRef(area.Ref)
+			if !ok {
+				continue
+			}
+			appendRoom(area.Kind, area.Ref, AreaRoomName(key), index, false)
+		}
 	}
 
 	// Direct messages map to the counterpart's office.
@@ -191,6 +230,11 @@ func (s *Service) GetRoom(orgID, userID string, sets AccessSets, ref models.Offi
 	access := CanAccessFromSets(sets, ref, userID)
 	if !access.CanEnter {
 		return nil, nil // caller will handle 403/404
+	}
+
+	floors, err := s.SyncFloorAssignments(orgID)
+	if err != nil {
+		return nil, err
 	}
 
 	// Build just this room
@@ -239,6 +283,12 @@ func (s *Service) GetRoom(orgID, userID string, sets AccessSets, ref models.Offi
 		if name == "" {
 			name = fmt.Sprintf("Office %s", refStr)
 		}
+	case models.OfficeRoomKindArea:
+		if _, key, ok := ParseAreaRef(refStr); ok {
+			name = AreaRoomName(key)
+		} else {
+			name = "Area"
+		}
 	}
 
 	bounds := defaultBounds(kind, refStr, index)
@@ -259,6 +309,11 @@ func (s *Service) GetRoom(orgID, userID string, sets AccessSets, ref models.Offi
 		return nil, nil
 	}
 
+	floorIndex := RoomFloorIndex(ref)
+	if kind == models.OfficeRoomKindPersonal {
+		floorIndex = memberFloor(floors, refStr)
+	}
+
 	return &models.OfficeRoomResponse{
 		ID:         EncodeRoomID(kind, refStr),
 		Kind:       kind,
@@ -266,7 +321,7 @@ func (s *Service) GetRoom(orgID, userID string, sets AccessSets, ref models.Offi
 		RefID:      refStr,
 		Capacity:   capacity,
 		IsLocked:   locked,
-		FloorIndex: RoomFloorIndex(models.OfficeRoomRef{Kind: kind, Ref: refStr}),
+		FloorIndex: floorIndex,
 		Bounds:     bounds,
 	}, nil
 }
@@ -363,6 +418,7 @@ func (s *Service) organisationMembers(orgID string) ([]memberSummary, error) {
 		Joins("LEFT JOIN users ON users.id = org_user_managements.user_id").
 		Where("org_user_managements.organisation_id = ?", orgID).
 		Where("org_user_managements.is_deactivated = ?", false).
+		Order("org_user_managements.created_at ASC, org_user_managements.user_id ASC").
 		Scan(&rows).Error
 	if err != nil {
 		return nil, err

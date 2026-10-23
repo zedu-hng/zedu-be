@@ -65,6 +65,14 @@ func ParseRoomID(roomID string) (models.OfficeRoomRef, error) {
 			return models.OfficeRoomRef{}, fmt.Errorf("room id %q is missing its reference", roomID)
 		}
 		return models.OfficeRoomRef{Kind: kind, Ref: ref}, nil
+	case models.OfficeRoomKindArea:
+		if !found {
+			return models.OfficeRoomRef{}, fmt.Errorf("room id %q is missing its reference", roomID)
+		}
+		if _, _, ok := ParseAreaRef(ref); !ok {
+			return models.OfficeRoomRef{}, fmt.Errorf("room id %q is not a valid area reference", roomID)
+		}
+		return models.OfficeRoomRef{Kind: kind, Ref: ref}, nil
 	default:
 		return models.OfficeRoomRef{}, fmt.Errorf("unknown room kind %q", kind)
 	}
@@ -76,14 +84,22 @@ func IsSharedRoom(ref models.OfficeRoomRef) bool {
 	return ref.Kind != models.OfficeRoomKindPersonal
 }
 
-// RoomFloorIndex is the floor a room sits on. Shared rooms live on the
-// general floor; a private office lives on its owner's floor, which is the
-// first member floor until the floor assignment lands.
+// RoomFloorIndex is the floor a room sits on when nothing more precise is
+// known. Shared rooms live on the general floor and an area room carries its
+// floor in its reference. A private office lives on its owner's floor, which
+// only the floor assignment knows, so this is the top member floor fallback.
 func RoomFloorIndex(ref models.OfficeRoomRef) int {
-	if ref.Kind == models.OfficeRoomKindPersonal {
+	switch ref.Kind {
+	case models.OfficeRoomKindArea:
+		if floor, _, ok := ParseAreaRef(ref.Ref); ok {
+			return floor
+		}
 		return models.OfficeFloorMember
+	case models.OfficeRoomKindPersonal:
+		return models.OfficeFloorMember
+	default:
+		return models.OfficeFloorGeneral
 	}
-	return models.OfficeFloorGeneral
 }
 
 // IsEnabled reports whether the organisation has The Office switched on.
