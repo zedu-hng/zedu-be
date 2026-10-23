@@ -25,7 +25,7 @@ type Webhook struct {
 	WebhookSlug    string           `gorm:"column:webhook_slug; type:text;null" json:"webhook_slug"`
 	ChannelId      string           `gorm:"column:channel_id; type:uuid" json:"channel_id"`
 	CreatedAt      time.Time        `gorm:"column:created_at; not null; autoCreateTime" json:"created_at"`
-	DeletedAt      time.Time        `gorm:"column: deleted_at; not null; autoDeleteTime" json:"deleted_at"`
+	DeletedAt      time.Time        `gorm:"column:deleted_at; not null; autoDeleteTime" json:"deleted_at"`
 	UpdatedAt      time.Time        `gorm:"column:updated_at; null; autoUpdateTime" json:"updated_at"`
 	HistoryWebhook []HistoryWebhook `gorm:"foreignKey:WebhookID;constraint:OnUpdate:CASCADE,OnDelete:SET NULL;" json:"webhook_history"`
 }
@@ -41,7 +41,7 @@ type HistoryWebhook struct {
 	Retries     int64     `gorm:"type:integer;not null" json:"retries"`
 	CreatedAt   time.Time `gorm:"column:created_at; not null; autoCreateTime" json:"-"`
 	UpdatedAt   time.Time `gorm:"column:updated_at; null; autoUpdateTime" json:"attempted"`
-	DeletedAt   time.Time `gorm:"column: deleted_at; not null; autoDeleteTime" json:"-"`
+	DeletedAt   time.Time `gorm:"column:deleted_at; not null; autoDeleteTime" json:"-"`
 }
 
 type CreateWebhookRequest struct {

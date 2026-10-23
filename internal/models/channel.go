@@ -41,7 +41,7 @@ type Channels struct {
 	IsRestricted      bool      `gorm:"column:is_restricted;default:false" json:"is_restricted"`
 	ShowJoinedMessage bool      `gorm:"column:show_joined_message;default:true" json:"show_joined_message"`
 	CreatedAt         time.Time `gorm:"column:created_at; not null; autoCreateTime" json:"created_at"`
-	DeletedAt         time.Time `gorm:"column: deleted_at; not null; autoDeleteTime" json:"-"`
+	DeletedAt         time.Time `gorm:"column:deleted_at; not null; autoDeleteTime" json:"-"`
 }
 
 type ToggleJoinedMessageRequest struct {

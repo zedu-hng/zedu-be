@@ -23,7 +23,7 @@ type Group struct {
 	Archived       bool       `gorm:"column:archived;default:false" json:"archived"`
 	CreatedAt      time.Time  `gorm:"column:created_at; not null; autoCreateTime" json:"created_at"`
 	UpdatedAt      time.Time  `gorm:"column: updated_at; not null; autoUpdateTime" json:"updated_at"`
-	DeletedAt      time.Time  `gorm:"column: deleted_at; not null; autoDeleteTime" json:"deleted_at"`
+	DeletedAt      time.Time  `gorm:"column:deleted_at; not null; autoDeleteTime" json:"deleted_at"`
 }
 
 type CreateGroupRequest struct {
