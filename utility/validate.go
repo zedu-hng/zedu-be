@@ -201,6 +201,15 @@ func RegisterCustomValidations(v *validator.Validate) {
 		return IsValidEmoji(value)
 	})
 
+	_ = v.RegisterValidation("hexcolor", func(fl validator.FieldLevel) bool {
+		value := fl.Field().String()
+		if value == "" {
+			return false
+		}
+		matched, _ := regexp.MatchString(`^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$`, value)
+		return matched
+	})
+
 	_ = v.RegisterValidation("status_expiry", func(fl validator.FieldLevel) bool {
 		value := fl.Field().String()
 		if value == "" {

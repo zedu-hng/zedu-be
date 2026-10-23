@@ -9,6 +9,7 @@ func RunAllMigrations(db *storage.Database) {
 
 	// verification migration
 	MigrateModels(db.Postgresql, AuthMigrationModels(), AlterColumnModels())
+	OfficeIndexes(db.Postgresql)
 
 }
 
