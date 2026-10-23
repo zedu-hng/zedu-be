@@ -31,6 +31,10 @@ type OrgUserManagement struct {
 	OrganisationID string                 `gorm:"type:uuid;primaryKey;not null" json:"organisation_id"`
 	Status         string                 `gorm:"type:varchar(255)" json:"status"`
 	RoleID         string                 `gorm:"type:uuid;null" json:"role_id"`
+	// FloorIndex is the member floor this person's office sits on. It is
+	// empty until the tower assigns one; the general floor is never stored
+	// here because it is derived from the org's channels.
+	FloorIndex     *int                   `gorm:"column:floor_index;type:int;null" json:"floor_index,omitempty"`
 	IsDeactivated  bool                   `gorm:"column:is_deactivated;type:bool;default:false" json:"is_deactivated"`
 	CreatedAt      time.Time              `gorm:"column:created_at;not null;autoCreateTime" json:"created_at"`
 	DeletedAt      time.Time              `gorm:"index" json:"deleted_at"`

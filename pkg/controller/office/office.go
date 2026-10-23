@@ -249,6 +249,7 @@ func (base *Controller) Bootstrap(c *gin.Context) {
 			Name:  organisation.Name,
 		},
 		Settings:       settings,
+		Floors:         service.FloorDirectory(directory.Floors),
 		Rooms:          directory.Rooms,
 		Layouts:        layouts,
 		ChannelRoomMap: directory.ChannelRoomMap,

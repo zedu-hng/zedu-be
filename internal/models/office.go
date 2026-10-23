@@ -21,6 +21,15 @@ const (
 	OfficeRoomKindFocus     = "focus"
 	OfficeRoomKindChannel   = "channel"
 	OfficeRoomKindPersonal  = "personal"
+	OfficeRoomKindArea      = "area"
+)
+
+// The per-floor extras. They are ordinary rooms on a member floor, not desks,
+// so nobody is allocated one.
+const (
+	OfficeAreaVisitors = "visitors"
+	OfficeAreaPods     = "pods"
+	OfficeAreaGames    = "games"
 )
 
 const (
@@ -33,9 +42,17 @@ const (
 	// OfficeFloorGeneral is the floor every shared room sits on: the general
 	// floor at the top of the tower, holding every channel in the org.
 	OfficeFloorGeneral = 0
-	// OfficeFloorMember is the floor a member's private office sits on when
-	// the member has no floor assignment yet.
+	// OfficeFloorMember is the top member floor, directly below the general
+	// floor. The earliest joiners sit here.
 	OfficeFloorMember = 1
+	// OfficeFloorCapacity is the number of private offices on a member floor.
+	// A floor holds exactly this many and the tower grows downwards.
+	OfficeFloorCapacity = 40
+)
+
+const (
+	OfficeFloorKindGeneral = "general"
+	OfficeFloorKindMember  = "member"
 )
 
 // OfficeRoomRef is the parsed form of the opaque composite room id used by
@@ -223,9 +240,21 @@ type OfficeBuildingResponse struct {
 }
 
 // OfficeBootstrapResponse is the payload of GET /office/bootstrap.
+// OfficeFloorResponse is one storey in the tower directory. The general floor
+// is index zero, above every member floor.
+type OfficeFloorResponse struct {
+	Index     int    `json:"index"`
+	Kind      string `json:"kind"`
+	Name      string `json:"name"`
+	Capacity  int    `json:"capacity"`
+	Members   int    `json:"members"`
+	HasPortal bool   `json:"hasPortal"`
+}
+
 type OfficeBootstrapResponse struct {
 	Building       OfficeBuildingResponse          `json:"building"`
 	Settings       OfficeSettings                  `json:"settings"`
+	Floors         []OfficeFloorResponse           `json:"floors"`
 	Rooms          []OfficeRoomResponse            `json:"rooms"`
 	Layouts        map[string]OfficeLayoutResponse `json:"layouts"`
 	ChannelRoomMap map[string]string               `json:"channelRoomMap"`
