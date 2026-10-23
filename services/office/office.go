@@ -1,6 +1,7 @@
 package office
 
 import (
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -111,21 +112,24 @@ func (s *Service) IsEnabled(orgID string) (bool, error) {
 func (s *Service) Settings(orgID string) (models.OfficeSettings, error) {
 	settings := models.OfficeSettings{Enabled: true}
 
-	var raw []byte
+	// The column is read into a NullString rather than a []byte: GORM cannot
+	// drive a []byte destination on a raw query, it tries to read the column
+	// into a single byte and the scan fails.
+	var raw sql.NullString
 	err := s.Db.Postgresql.Raw(
-		"SELECT office_settings FROM organisations WHERE id = ?",
+		"SELECT office_settings::text FROM organisations WHERE id = ?",
 		orgID,
 	).Scan(&raw).Error
 	if err != nil {
 		return models.OfficeSettings{}, err
 	}
 
-	if len(raw) == 0 {
+	if !raw.Valid || strings.TrimSpace(raw.String) == "" {
 		return settings, nil
 	}
 
 	values := map[string]any{}
-	if err := json.Unmarshal(raw, &values); err != nil {
+	if err := json.Unmarshal([]byte(raw.String), &values); err != nil {
 		return models.OfficeSettings{}, err
 	}
 
