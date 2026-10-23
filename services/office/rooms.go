@@ -407,16 +407,19 @@ func (s *Service) dmOfficeMap(orgID, userID string) (map[string]string, error) {
 	officeMap := map[string]string{}
 
 	// 1:1 direct messages.
+	//
+	// Only the two columns this map needs are selected. Reading every column
+	// of dm_channels into plain strings breaks as soon as a nullable field
+	// such as channel_type holds NULL, which fails the scan and takes the
+	// whole office bootstrap down with a 500.
 	type dmRow struct {
-		ID            string
 		ChannelID     string
-		UserID        string
 		ParticipantID *string
-		ChannelType   string
 	}
 
 	var rows []dmRow
 	err := s.Db.Postgresql.Model(&models.DmChannels{}).
+		Select("channel_id, participant_id").
 		Where("org_id = ? AND user_id = ?", orgID, userID).
 		Find(&rows).Error
 	if err != nil {
@@ -438,6 +441,7 @@ func (s *Service) dmOfficeMap(orgID, userID string) (map[string]string, error) {
 
 	var participants []participantRow
 	err = s.Db.Postgresql.Model(&models.ChannelParticipant{}).
+		Select("channel_id, user_id").
 		Where("org_id = ? AND user_id = ?", orgID, userID).
 		Find(&participants).Error
 	if err != nil {
