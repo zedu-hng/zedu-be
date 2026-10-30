@@ -18,6 +18,7 @@ import (
 	"github.com/hngprojects/telex_be/pkg/middleware"
 	"github.com/hngprojects/telex_be/pkg/repository/centrifuge"
 	"github.com/hngprojects/telex_be/pkg/repository/storage"
+	"github.com/hngprojects/telex_be/pkg/repository/storage/elastic"
 	"github.com/hngprojects/telex_be/pkg/repository/storage/postgresql"
 	"github.com/hngprojects/telex_be/services/actions"
 	"github.com/hngprojects/telex_be/services/rabbitmq"
@@ -244,6 +245,24 @@ func EditChannelsMsg(req models.EditMessageRequest, db *gorm.DB, c *gin.Context,
 
 	if !(dmChanExist || chanExist) {
 		return &newMsg, http.StatusNotFound, errors.New("channel does not exist")
+	}
+
+	// Refuse to edit a message once another user has replied to it.
+	query := map[string]any{
+		"query": map[string]any{
+			"bool": map[string]any{
+				"must": []map[string]any{
+					{"term": map[string]any{"thread_id": req.ThreadId}},
+				},
+				"must_not": []map[string]any{
+					{"term": map[string]any{"user_id": userID}},
+				},
+			},
+		},
+		"size": 1,
+	}
+	if hasReply, err := elastic.CheckExists(storage.DB.Elastic, models.MessageIndexName, query); err == nil && hasReply {
+		return &newMsg, http.StatusConflict, errors.New("message cannot be edited after another user has replied")
 	}
 
 	message.ID = req.MessageId
