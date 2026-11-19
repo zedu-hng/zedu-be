@@ -19,7 +19,6 @@ import (
 	"github.com/hngprojects/telex_be/pkg/repository/centrifuge"
 	"github.com/hngprojects/telex_be/pkg/repository/openrouter"
 	"github.com/hngprojects/telex_be/pkg/repository/pushNotifications/apns"
-	"github.com/hngprojects/telex_be/pkg/repository/pushNotifications/firebase"
 	"github.com/hngprojects/telex_be/pkg/repository/pushNotifications/onesignal"
 	"github.com/hngprojects/telex_be/pkg/repository/rabbitmq"
 	riverqueueBg "github.com/hngprojects/telex_be/pkg/repository/riverqueue"
@@ -55,7 +54,6 @@ func main() {
 	models.InitIndexNames(configuration.Elastic.ElasticIndexPrefix, configuration.App.Mode)
 	elastic.ConnectToElastic(logger, configuration.Elastic)
 	onesignal.ConnectOneSignal(logger, configuration.OneSignal)
-	firebase.ConnectFirebase(logger, configuration.Firebase)
 	apns.ConnectAPNs(logger, configuration.Apple)
 	mongodb.StartMongoDBConnection(logger, config.Config.MongoDB)
 	webpush.NewPushClient(logger, configuration.WebPush)

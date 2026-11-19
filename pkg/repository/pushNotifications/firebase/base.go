@@ -12,6 +12,8 @@ type FirebaseClient struct {
 
 var Client *FirebaseClient = &FirebaseClient{}
 
+// Initialize and return a reusable Firebase client
 func Connection() *FirebaseClient {
+
 	return Client
 }

@@ -15,9 +15,8 @@ import (
 	"github.com/hngprojects/telex_be/pkg/repository/agora"
 	"github.com/hngprojects/telex_be/pkg/repository/centrifuge"
 	"github.com/hngprojects/telex_be/pkg/repository/pushNotifications/apns"
-
+	"github.com/hngprojects/telex_be/pkg/repository/pushNotifications/onesignal"
 	"github.com/hngprojects/telex_be/pkg/repository/storage"
-	push_notifications "github.com/hngprojects/telex_be/services/pushNotifications"
 	"github.com/hngprojects/telex_be/utility"
 	"github.com/lib/pq"
 )
@@ -240,7 +239,7 @@ func CancelDirectCall(db *storage.Database, logger *utility.Logger, buzzID, user
 			Event:            string(models.DirectCallCanceled),
 		}
 
-		sendDirectCallPush(db, logger, others, req, pushMsg)
+		sendDirectCallOneSignal(db, logger, others, req, pushMsg)
 		go sendDirectCallVoIP(db, logger, others, req, pushMsg)
 	}
 
@@ -583,7 +582,7 @@ func notifyCallParticipants(db *storage.Database, logger *utility.Logger, partic
 		UserIds: others,
 	}
 
-	sendDirectCallPush(db, logger, others, req, pushMsg)
+	sendDirectCallOneSignal(db, logger, others, req, pushMsg)
 	go sendDirectCallVoIP(db, logger, others, req, pushMsg)
 }
 
@@ -618,7 +617,7 @@ func notifyCallCanceled(db *storage.Database, logger *utility.Logger, participan
 		UserIds: others,
 	}
 
-	sendDirectCallPush(db, logger, others, req, pushMsg)
+	sendDirectCallOneSignal(db, logger, others, req, pushMsg)
 }
 
 func handleDirectCallCancellation(db *storage.Database, logger *utility.Logger, buzz models.Buzz, buzzID string) (models.DirectCallResponse, int, error) {
@@ -646,6 +645,8 @@ func handleDirectCallCancellation(db *storage.Database, logger *utility.Logger, 
 		CreatedAt:  buzz.CreatedAt,
 	}
 
+
+
 	if orgID != "" {
 		broadcastChannels := make([]string, 0, len(participantIDs))
 		for _, uid := range participantIDs {
@@ -669,7 +670,26 @@ func handleDirectCallCancellation(db *storage.Database, logger *utility.Logger, 
 	return resp, http.StatusOK, nil
 }
 
-func sendDirectCallPush(db *storage.Database, logger *utility.Logger, userIDs []string, req models.PushRequest, payload models.CallPushPayload) {
+func sendDirectCallOneSignal(db *storage.Database, logger *utility.Logger, userIDs []string, req models.PushRequest, payload models.CallPushPayload) {
+	var users []models.User
+	if err := db.Postgresql.Where("id IN ?", userIDs).
+		Select("id", "onesignal_subscription_id").
+		Find(&users).Error; err != nil {
+		logger.Error("sendDirectCallOneSignal: failed to fetch users: %v", err)
+		return
+	}
+
+	subscriptionIDs := make([]string, 0, len(users))
+	for _, u := range users {
+		if u.OneSignalSubscriptionID != "" {
+			subscriptionIDs = append(subscriptionIDs, u.OneSignalSubscriptionID)
+		}
+	}
+
+	if len(subscriptionIDs) == 0 {
+		return
+	}
+
 	callData := map[string]interface{}{
 		"buzz_id":            payload.BuzzID,
 		"channel_id":         payload.ChannelID,
@@ -678,16 +698,10 @@ func sendDirectCallPush(db *storage.Database, logger *utility.Logger, userIDs []
 		"avatar_url":         payload.AvatarURL,
 		"default_avatar_url": payload.DefaultAvatarURL,
 		"event":              payload.Event,
-		"buzz_code":          utility.ExtractBuzzCode(payload.BuzzID),
-		"host_id":            payload.CallerID,
 	}
 
-	if _, err := push_notifications.Dispatch(logger, db.Postgresql, push_notifications.PushDispatch{
-		Req:      req,
-		UserIDs:  userIDs,
-		CallData: callData,
-	}); err != nil {
-		logger.Error("sendDirectCallPush: failed to send notification: %v", err)
+	if err := onesignal.SendDirectCallNotification(logger, subscriptionIDs, req, callData, db.Postgresql, userIDs); err != nil {
+		logger.Error("sendDirectCallOneSignal: failed to send notification: %v", err)
 	}
 }
 
