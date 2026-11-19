@@ -20825,6 +20825,12 @@ paths:
               properties:
                 fcm_token:
                   type: string
+                  description: Firebase Cloud Messaging device registration token
+                platform:
+                  type: string
+                  enum: [web, android, ios]
+                  default: web
+                  description: Device client platform
               required:
                 - fcm_token
 
@@ -20842,10 +20848,16 @@ paths:
                     example: success
                   message:
                     type: string
-                    example: "Fcm token saved successfully"
+                    example: "fcmtoken created for user successfully"
                   status_code:
                     type: integer
                     example: 201
+                  data:
+                    type: object
+                    properties:
+                      provider:
+                        type: string
+                        example: firebase
 
         "400":
           description: Invalid input
@@ -20856,6 +20868,64 @@ paths:
 
         "422":
           description: Unprocessed Entity
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UnprocessedEntityErrorSchema"
+
+    delete:
+      tags:
+        - Firebase FcmToken
+      security:
+        - bearerAuth: []
+      summary: Delete users fcm token
+      description: Unregister an FCM device token for authenticated user on logout
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                fcm_token:
+                  type: string
+                  description: FCM device token to delete
+              required:
+                - fcm_token
+      responses:
+        "200":
+          description: Fcm token deleted for user successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  message:
+                    type: string
+                    example: "fcmtoken deleted for user successfully"
+                  status_code:
+                    type: integer
+                    example: 200
+
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BadRequestErrorSchema"
+
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UnauthorizedErrorSchema"
+
+        "422":
+          description: Unprocessable Entity
           content:
             application/json:
               schema:

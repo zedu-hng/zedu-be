@@ -7,6 +7,7 @@ import (
 // _ = db.AutoMigrate(MigrationModels()...)
 func AuthMigrationModels() []any {
 	return []any{
+		models.UserDeviceToken{},
 		models.ChannelExport{},
 		models.UserThreadRead{},
 		models.BuzzRecording{},
@@ -28,6 +29,7 @@ func AuthMigrationModels() []any {
 		models.AgentWorkflow{},
 		models.Prompts{},
 		models.FcmTokens{},
+		models.UserDeviceToken{},
 		models.CreditTransaction{},
 		models.IntegrationOutput{},
 		models.Integrations{},
