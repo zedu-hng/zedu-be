@@ -1,4 +1,4 @@
-package test_push_devices
+package test_fcm
 
 import (
 	"fmt"
@@ -12,55 +12,59 @@ import (
 	"github.com/hngprojects/telex_be/external/request"
 	"github.com/hngprojects/telex_be/internal/config"
 	"github.com/hngprojects/telex_be/internal/models"
-	"github.com/hngprojects/telex_be/pkg/controller/user"
+	fcmcontroller "github.com/hngprojects/telex_be/pkg/controller/fcmTokens"
 	"github.com/hngprojects/telex_be/pkg/middleware"
 	"github.com/hngprojects/telex_be/pkg/repository/storage"
 	tst "github.com/hngprojects/telex_be/tests"
 	"github.com/hngprojects/telex_be/utility"
 )
 
-func SetupPushDeviceTestRouter() (*gin.Engine, *storage.Database) {
+func SetupFCMTestRouter() (*gin.Engine, *fcmcontroller.Controller) {
 	gin.SetMode(gin.TestMode)
 
-	logger := tst.Setup()
 	db := storage.Connection()
+	logger := tst.Setup()
+	validate := validator.New()
 
-	userController := &user.Controller{
+	fcmCtrl := &fcmcontroller.Controller{
 		Db:        db,
-		Validator: validator.New(),
+		Validator: validate,
 		Logger:    logger,
-		ExtReq:    request.ExternalRequest{Logger: logger, Test: true},
+		ExtReq: request.ExternalRequest{
+			Logger: logger,
+			Test:   true,
+		},
 	}
 
 	r := gin.Default()
-	userUrl := r.Group("/api/v1", middleware.Authorize(db.Postgresql))
+	fcmGroup := r.Group("/api/v1/fcmtoken", middleware.Authorize(db.Postgresql))
 	{
-		userUrl.POST("/users/push-devices", userController.RegisterPushDevice)
-		userUrl.DELETE("/users/push-devices", userController.UnregisterPushDevice)
+		fcmGroup.POST("", fcmCtrl.CreateFcmToken)
+		fcmGroup.DELETE("", fcmCtrl.DeleteFcmToken)
 	}
 
-	return r, db
+	return r, fcmCtrl
 }
 
 func CreateTestUser(t *testing.T, db *storage.Database) models.User {
-	uuid := utility.GenerateUUID()
-	u := models.User{
-		ID:                      uuid,
-		Email:                   fmt.Sprintf("push%v@example.com", uuid),
-		Name:                    fmt.Sprintf("pushuser%v", uuid),
-		Password:                "password123",
-		Role:                    int(models.RoleIdentity.User),
-		OneSignalSubscriptionID: "legacy-onesignal-sub",
+	uid := utility.GenerateUUID()
+	user := models.User{
+		ID:       uid,
+		Email:    fmt.Sprintf("fcm_test_%v@example.com", uid),
+		Name:     fmt.Sprintf("fcmuser_%v", uid),
+		Password: "password123",
+		Role:     int(models.RoleIdentity.User),
 	}
 
-	if err := db.Postgresql.Create(&u).Error; err != nil {
+	if err := db.Postgresql.Create(&user).Error; err != nil {
 		t.Fatalf("Failed to create test user: %v", err)
 	}
 
-	return u
+	return user
 }
 
 func GenerateTestToken(t *testing.T, db *storage.Database, userID string) string {
+	cfg := config.GetConfig()
 	accessUUID := utility.GenerateUUID()
 	claims := jwt.MapClaims{
 		"user_id":     userID,
@@ -70,7 +74,8 @@ func GenerateTestToken(t *testing.T, db *storage.Database, userID string) string
 		"authorised":  true,
 	}
 
-	tokenString, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte(config.GetConfig().Server.Secret))
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	tokenString, err := token.SignedString([]byte(cfg.Server.Secret))
 	if err != nil {
 		t.Fatalf("Failed to generate token: %v", err)
 	}

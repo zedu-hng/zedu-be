@@ -16,7 +16,3 @@ var Client *OneSignalClient = &OneSignalClient{}
 func Connection() *OneSignalClient {
 	return Client
 }
-
-func IsEnabled() bool {
-	return Client.Client != nil && Client.AppID != "" && Client.ApiKey != ""
-}

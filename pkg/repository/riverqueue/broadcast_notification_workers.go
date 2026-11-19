@@ -70,18 +70,20 @@ func (w *BroadcastNotificationWorker) Work(ctx context.Context, job *river.Job[m
 			userIDs = append(userIDs, user.ID)
 		}
 
-		pushReq := models.PushRequest{
-			Title:     args.Title,
-			Message:   args.Message,
-			AvatarUrl: args.AvatarUrl,
-		}
+		if len(userIDs) > 0 {
+			pushReq := models.PushRequest{
+				Title:     args.Title,
+				Message:   args.Message,
+				AvatarUrl: args.AvatarUrl,
+			}
 
-		reached, err := push_notifications.PushToUsersForBroadcast(pushReq, w.logger, w.db, userIDs)
-		if err != nil {
-			w.logger.Error("Failed to send broadcast notification batch: %s", err.Error())
-			totalFailed += len(userIDs) - reached
+			if err := push_notifications.PushOneSignalToUsersForBroadcast(pushReq, w.logger, w.db, userIDs); err != nil {
+				w.logger.Error("Failed to send broadcast notification batch: %s", err.Error())
+				totalFailed += len(userIDs)
+			} else {
+				totalSent += len(userIDs)
+			}
 		}
-		totalSent += reached
 
 		offset += batchSize
 
