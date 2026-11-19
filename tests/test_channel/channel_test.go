@@ -347,6 +347,10 @@ func TestToggleUserJoinedMessage(t *testing.T) {
 
 	orgId, _, _ := tst.CreateOrganisation(t, r, db, orgCtrl, createOrgData, token)
 
+	// The user's current org is now the created org; re-issue the token so its
+	// org_id claim matches the org the channel lives in.
+	token = tst.GetLoginToken(t, r, authCtrl, loginData)
+
 	createChannelsData := models.CreateChannelsRequest{
 		Name:           fmt.Sprintf("ToggleChan%s", utility.GenerateUUID()),
 		Username:       fmt.Sprintf("togglechan%s", utility.GenerateUUID()),

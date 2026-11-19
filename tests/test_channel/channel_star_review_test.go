@@ -31,35 +31,42 @@ func TestChannelStarReviewRegressions(t *testing.T) {
 	router := gin.New()
 	router.POST("/organisations/:org_id/channels/:channelId/star", middleware.Authorize(db.Postgresql), controller.ToggleStarChannel)
 
-	t.Run("organisation UUID casing", func(t *testing.T) {
-		path := fmt.Sprintf("/organisations/%s/channels/%s/star", strings.ToUpper(ch.OrganisationID), channelID)
-		req := httptest.NewRequest(http.MethodPost, path, nil)
-		req.Header.Set("Authorization", "Bearer "+ownerToken)
-		rr := httptest.NewRecorder()
-		router.ServeHTTP(rr, req)
-		if rr.Code != http.StatusOK {
-			t.Fatalf("valid uppercase UUID: status %d: %s", rr.Code, rr.Body.String())
-		}
-		t.Cleanup(func() {
-			db.Postgresql.Where("channel_id = ?", channelID).Unscoped().Delete(&models.ChannelStar{})
-		})
-	})
-
-	t.Run("malformed and mismatched organisations", func(t *testing.T) {
-		for _, tc := range []struct {
-			orgID string
-			code  int
-		}{
-			{"invalid", http.StatusBadRequest},
-			{utility.GenerateUUID(), http.StatusNotFound},
-		} {
-			req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/organisations/%s/channels/%s/star", tc.orgID, channelID), nil)
+	t.Run("path organisation is ignored in favour of the token", func(t *testing.T) {
+		for _, pathOrg := range []string{strings.ToUpper(ch.OrganisationID), utility.GenerateUUID(), "not-a-uuid"} {
+			req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/organisations/%s/channels/%s/star", pathOrg, channelID), nil)
 			req.Header.Set("Authorization", "Bearer "+ownerToken)
 			rr := httptest.NewRecorder()
 			router.ServeHTTP(rr, req)
-			if rr.Code != tc.code {
-				t.Fatalf("organisation %q: got %d, want %d", tc.orgID, rr.Code, tc.code)
+			if rr.Code != http.StatusOK {
+				t.Fatalf("path organisation %q: got %d, want %d: %s", pathOrg, rr.Code, http.StatusOK, rr.Body.String())
 			}
+			db.Postgresql.Where("channel_id = ?", channelID).Unscoped().Delete(&models.ChannelStar{})
+		}
+	})
+
+	t.Run("channel outside the token organisation is hidden", func(t *testing.T) {
+		var otherOrg models.Organisation
+		if err := db.Postgresql.Where("owner_id = ? AND id <> ?", ch.OwnerId, ch.OrganisationID).First(&otherOrg).Error; err != nil {
+			t.Fatalf("failed to load a second organisation for the owner: %v", err)
+		}
+		foreignChannel := models.Channels{
+			ID:             utility.GenerateUUID(),
+			Name:           "foreign-org-channel",
+			Description:    "channel owned by another organisation",
+			OwnerId:        ch.OwnerId,
+			OrganisationID: otherOrg.ID,
+		}
+		if err := db.Postgresql.Create(&foreignChannel).Error; err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { db.Postgresql.Unscoped().Delete(&foreignChannel) })
+
+		req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/organisations/%s/channels/%s/star", ch.OrganisationID, foreignChannel.ID), nil)
+		req.Header.Set("Authorization", "Bearer "+ownerToken)
+		rr := httptest.NewRecorder()
+		router.ServeHTTP(rr, req)
+		if rr.Code != http.StatusNotFound {
+			t.Fatalf("foreign channel: got %d, want %d: %s", rr.Code, http.StatusNotFound, rr.Body.String())
 		}
 	})
 

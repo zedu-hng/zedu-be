@@ -1178,6 +1178,13 @@ func (base *Controller) ToggleStarChannel(c *gin.Context) {
 	}
 	userClaims := claims.(jwt.MapClaims)
 	userId, _ := userClaims["user_id"].(string)
+	orgId, _ := userClaims["org_id"].(string)
+
+	if _, err := uuid.Parse(orgId); err != nil {
+		rd := utility.BuildErrorResponse(http.StatusBadRequest, "error", "invalid organisation id format", errors.New("failed to parse organisation id"), nil)
+		c.JSON(http.StatusBadRequest, rd)
+		return
+	}
 
 	var ch models.Channels
 	exists = postgresql.CheckExists(base.Db.Postgresql, &ch, "id = ?", channelId)
@@ -1187,24 +1194,16 @@ func (base *Controller) ToggleStarChannel(c *gin.Context) {
 		return
 	}
 
-	if paramOrgId := c.Param("org_id"); paramOrgId != "" {
-		orgID, err := uuid.Parse(paramOrgId)
-		if err != nil {
-			rd := utility.BuildErrorResponse(http.StatusBadRequest, "error", "invalid organisation id format", err, nil)
-			c.JSON(http.StatusBadRequest, rd)
-			return
-		}
-		if orgID.String() != ch.OrganisationID {
-			rd := utility.BuildErrorResponse(http.StatusNotFound, "error", "channel not found", errors.New("channel not found in organisation"), nil)
-			c.JSON(http.StatusNotFound, rd)
-			return
-		}
+	if ch.OrganisationID != orgId {
+		rd := utility.BuildErrorResponse(http.StatusNotFound, "error", "channel not found", errors.New("channel not found in organisation"), nil)
+		c.JSON(http.StatusNotFound, rd)
+		return
 	}
 
 	req := models.ChannelStarRequest{
 		UserId:    userId,
 		ChannelId: channelId,
-		OrgId:     ch.OrganisationID,
+		OrgId:     orgId,
 	}
 
 	isStarred, code, err := channel.ToggleStarChannel(req, base.Db.Postgresql)
@@ -1237,7 +1236,7 @@ func (base *Controller) GetStarredChannels(c *gin.Context) {
 	}
 	userClaims := claims.(jwt.MapClaims)
 	userId, _ := userClaims["user_id"].(string)
-	orgId := c.Param("org_id")
+	orgId, _ := userClaims["org_id"].(string)
 
 	if _, err := uuid.Parse(orgId); err != nil {
 		rd := utility.BuildErrorResponse(http.StatusBadRequest, "error", "invalid organisation id format", errors.New("failed to parse organisation id"), nil)

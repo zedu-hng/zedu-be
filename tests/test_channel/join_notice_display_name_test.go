@@ -10,6 +10,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/validator/v10"
+	"github.com/gofrs/uuid"
 
 	"github.com/hngprojects/telex_be/external/request"
 	"github.com/hngprojects/telex_be/internal/models"
@@ -92,6 +93,13 @@ func setupJoinNoticeTestEnv(t *testing.T, fullName, userName, displayName string
 		RoleID:         utility.GenerateUUID(),
 	})
 
+	// Point the joiner's active organisation at the org they just joined so
+	// their token is org-scoped, mirroring a client that switched organisation.
+	joinerModel.CurrentOrg = uuid.FromStringOrNil(orgID)
+	if err := db.Postgresql.Save(&joinerModel).Error; err != nil {
+		t.Fatalf("failed to update joiner current org: %v", err)
+	}
+
 	// Pin the joiner's profile identity fields explicitly.
 	var prof models.Profile
 	if err := prof.GetProfileByUserId(db.Postgresql, joinerModel.ID, orgID); err != nil {
@@ -104,6 +112,11 @@ func setupJoinNoticeTestEnv(t *testing.T, fullName, userName, displayName string
 	}).Error; err != nil {
 		t.Fatalf("failed to update joiner profile: %v", err)
 	}
+
+	// Re-issue tokens now that both users are scoped to the created org, so the
+	// signed-in org_id in the claims matches the org the resources live in.
+	ownerToken = tst.GetLoginToken(t, r, authController, models.LoginRequestModel{Email: ownerSignup.Email, Password: ownerSignup.Password})
+	joinerToken = tst.GetLoginToken(t, r, authController, models.LoginRequestModel{Email: joinerSignup.Email, Password: joinerSignup.Password})
 
 	chanReq := models.CreateChannelsRequest{
 		Name:           fmt.Sprintf("joindisplay-%s", currUUID),
